@@ -38,13 +38,6 @@
 		AA000001000000000000AA05 /* FocusWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = FocusWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		FC1E71AD2F5CA95500B50209 /* Focuslly.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Focuslly.entitlements; sourceTree = "<group>"; };
 		FC1E71AE2F5CA98900B50209 /* FocusWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = FocusWidgetExtension.entitlements; path = FocusWidgetExtension/FocusWidgetExtension.entitlements; sourceTree = "<group>"; };
-		FC57887A302F1A75004A2D54 /* FocusllyCoreTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusllyCoreTypes.swift; sourceTree = "<group>"; };
-		FC57887B302F1AA2004A2D54 /* FocusllyCoreModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusllyCoreModels.swift; sourceTree = "<group>"; };
-		FC57887C302F1AAA004A2D54 /* FocusllySchema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusllySchema.swift; sourceTree = "<group>"; };
-		FC57887D302F1ABA004A2D54 /* FocusllyModelContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusllyModelContainer.swift; sourceTree = "<group>"; };
-		FC57887E302F1AEA004A2D54 /* FocusllyRepositories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusllyRepositories.swift; sourceTree = "<group>"; };
-		FC57887F302F1AF6004A2D54 /* WidgetSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshot.swift; sourceTree = "<group>"; };
-		FC578880302F1B1C004A2D54 /* FocusllyMigrationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusllyMigrationService.swift; sourceTree = "<group>"; };
 		FC74E5772F26C025001F65EE /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		FC74E5792F26C025001F65EE /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		FC7C19882F05531500E65175 /* Focuslly.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Focuslly.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -84,6 +77,11 @@
 			path = "Personal Productivity";
 			sourceTree = "<group>";
 		};
+		FC578874302F1A49004A2D54 /* FocusllyCore */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = FocusllyCore;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -104,60 +102,6 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		FC578874302F1A49004A2D54 /* FocusllyCore */ = {
-			isa = PBXGroup;
-			children = (
-				FC578875302F1A4B004A2D54 /* Models */,
-				FC578876302F1A4C004A2D54 /* Persistence */,
-				FC578877302F1A4D004A2D54 /* Migration */,
-				FC578878302F1A4E004A2D54 /* Repositories */,
-				FC578879302F1A4F004A2D54 /* Widget */,
-			);
-			path = FocusllyCore;
-			sourceTree = "<group>";
-		};
-		FC578875302F1A4B004A2D54 /* Models */ = {
-			isa = PBXGroup;
-			children = (
-				FC57887A302F1A75004A2D54 /* FocusllyCoreTypes.swift */,
-				FC57887B302F1AA2004A2D54 /* FocusllyCoreModels.swift */,
-			);
-			path = Models;
-			sourceTree = "<group>";
-		};
-		FC578876302F1A4C004A2D54 /* Persistence */ = {
-			isa = PBXGroup;
-			children = (
-				FC57887C302F1AAA004A2D54 /* FocusllySchema.swift */,
-				FC57887D302F1ABA004A2D54 /* FocusllyModelContainer.swift */,
-			);
-			path = Persistence;
-			sourceTree = "<group>";
-		};
-		FC578877302F1A4D004A2D54 /* Migration */ = {
-			isa = PBXGroup;
-			children = (
-				FC578880302F1B1C004A2D54 /* FocusllyMigrationService.swift */,
-			);
-			path = Migration;
-			sourceTree = "<group>";
-		};
-		FC578878302F1A4E004A2D54 /* Repositories */ = {
-			isa = PBXGroup;
-			children = (
-				FC57887E302F1AEA004A2D54 /* FocusllyRepositories.swift */,
-			);
-			path = Repositories;
-			sourceTree = "<group>";
-		};
-		FC578879302F1A4F004A2D54 /* Widget */ = {
-			isa = PBXGroup;
-			children = (
-				FC57887F302F1AF6004A2D54 /* WidgetSnapshot.swift */,
-			);
-			path = Widget;
-			sourceTree = "<group>";
-		};
 		FC74E5762F26C025001F65EE /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
@@ -173,10 +117,10 @@
 				FC1E71AE2F5CA98900B50209 /* FocusWidgetExtension.entitlements */,
 				FC1E71AD2F5CA95500B50209 /* Focuslly.entitlements */,
 				FC7C198A2F05531500E65175 /* Personal Productivity */,
+				FC578874302F1A49004A2D54 /* FocusllyCore */,
 				FC74E5762F26C025001F65EE /* Frameworks */,
 				FC7C19892F05531500E65175 /* Products */,
 				FCFD27BB2F5D8A63008E3047 /* Recovered References */,
-				FC578874302F1A49004A2D54 /* FocusllyCore */,
 			);
 			sourceTree = "<group>";
 		};
@@ -236,6 +180,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				FC7C198A2F05531500E65175 /* Personal Productivity */,
+				FC578874302F1A49004A2D54 /* FocusllyCore */,
 			);
 			name = Focuslly;
 			packageProductDependencies = (
