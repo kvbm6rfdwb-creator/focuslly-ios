@@ -1,17 +1,22 @@
-//
-//  Personal_ProductivityApp.swift
-//  Personal Productivity
-//
-//  Created by Karlo Dekanić on 31.12.2025..
-//
-
 import SwiftUI
 
 @main
-struct Personal_ProductivityApp: App {
+struct PersonalProductivityApp: App {
+    @StateObject private var coordinator = FocusSessionCoordinator()
+    @Environment(\.scenePhase) private var scenePhase
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            MainTabView()
+                .environmentObject(coordinator)
+                .onAppear {
+                    TaskStoreLocator.shared.store = nil // Not needed, or set in MainTabView if needed
+                    HapticManager.settings = nil // Not needed, or set in MainTabView if needed
+                    SoundManager.settings = nil // Not needed, or set in MainTabView if needed
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    // If you need to perform daily cleanup, do it via Notification or Coordinator
+                }
         }
     }
 }

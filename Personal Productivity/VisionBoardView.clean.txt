@@ -1,0 +1,1 @@
+Temporary backup of the reconstructed VisionBoardView was superseded by `VisionBoardView.swift`. This file intentionally has no Swift code so it won't be compiled.

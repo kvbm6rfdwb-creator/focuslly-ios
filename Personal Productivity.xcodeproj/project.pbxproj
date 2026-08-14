@@ -6,19 +6,94 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		AA000001000000000000AA16 /* FocusWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AA000001000000000000AA05 /* FocusWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		AA000001000000000000AA14 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FC7C19802F05531500E65175 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AA000001000000000000AA01;
+			remoteInfo = FocusWidgetExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		AA000001000000000000AA15 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				AA000001000000000000AA16 /* FocusWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
-		FC7C19882F05531500E65175 /* Personal Productivity.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Personal Productivity.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA000001000000000000AA05 /* FocusWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = FocusWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		FC1E71AD2F5CA95500B50209 /* Focuslly.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Focuslly.entitlements; sourceTree = "<group>"; };
+		FC1E71AE2F5CA98900B50209 /* FocusWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = FocusWidgetExtension.entitlements; path = FocusWidgetExtension/FocusWidgetExtension.entitlements; sourceTree = "<group>"; };
+		FC57887A302F1A75004A2D54 /* FocusllyCoreTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusllyCoreTypes.swift; sourceTree = "<group>"; };
+		FC57887B302F1AA2004A2D54 /* FocusllyCoreModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusllyCoreModels.swift; sourceTree = "<group>"; };
+		FC57887C302F1AAA004A2D54 /* FocusllySchema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusllySchema.swift; sourceTree = "<group>"; };
+		FC57887D302F1ABA004A2D54 /* FocusllyModelContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusllyModelContainer.swift; sourceTree = "<group>"; };
+		FC57887E302F1AEA004A2D54 /* FocusllyRepositories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusllyRepositories.swift; sourceTree = "<group>"; };
+		FC57887F302F1AF6004A2D54 /* WidgetSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshot.swift; sourceTree = "<group>"; };
+		FC578880302F1B1C004A2D54 /* FocusllyMigrationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusllyMigrationService.swift; sourceTree = "<group>"; };
+		FC74E5772F26C025001F65EE /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		FC74E5792F26C025001F65EE /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		FC7C19882F05531500E65175 /* Focuslly.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Focuslly.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		AA000001000000000000CC01 /* Exceptions for "FocusWidgetExtension" folder in "FocusWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = AA000001000000000000AA01 /* FocusWidgetExtension */;
+		};
+		FC9D01172F3F375E00F188EC /* Exceptions for "Personal Productivity" folder in "Focuslly" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = FC7C19872F05531500E65175 /* Focuslly */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		AA000001000000000000BB01 /* FocusWidgetExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				AA000001000000000000CC01 /* Exceptions for "FocusWidgetExtension" folder in "FocusWidgetExtension" target */,
+			);
+			path = FocusWidgetExtension;
+			sourceTree = "<group>";
+		};
 		FC7C198A2F05531500E65175 /* Personal Productivity */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				FC9D01172F3F375E00F188EC /* Exceptions for "Personal Productivity" folder in "Focuslly" target */,
+			);
 			path = "Personal Productivity";
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		AA000001000000000000AA04 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		FC7C19852F05531500E65175 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -29,45 +104,144 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		FC578874302F1A49004A2D54 /* FocusllyCore */ = {
+			isa = PBXGroup;
+			children = (
+				FC578875302F1A4B004A2D54 /* Models */,
+				FC578876302F1A4C004A2D54 /* Persistence */,
+				FC578877302F1A4D004A2D54 /* Migration */,
+				FC578878302F1A4E004A2D54 /* Repositories */,
+				FC578879302F1A4F004A2D54 /* Widget */,
+			);
+			path = FocusllyCore;
+			sourceTree = "<group>";
+		};
+		FC578875302F1A4B004A2D54 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				FC57887A302F1A75004A2D54 /* FocusllyCoreTypes.swift */,
+				FC57887B302F1AA2004A2D54 /* FocusllyCoreModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		FC578876302F1A4C004A2D54 /* Persistence */ = {
+			isa = PBXGroup;
+			children = (
+				FC57887C302F1AAA004A2D54 /* FocusllySchema.swift */,
+				FC57887D302F1ABA004A2D54 /* FocusllyModelContainer.swift */,
+			);
+			path = Persistence;
+			sourceTree = "<group>";
+		};
+		FC578877302F1A4D004A2D54 /* Migration */ = {
+			isa = PBXGroup;
+			children = (
+				FC578880302F1B1C004A2D54 /* FocusllyMigrationService.swift */,
+			);
+			path = Migration;
+			sourceTree = "<group>";
+		};
+		FC578878302F1A4E004A2D54 /* Repositories */ = {
+			isa = PBXGroup;
+			children = (
+				FC57887E302F1AEA004A2D54 /* FocusllyRepositories.swift */,
+			);
+			path = Repositories;
+			sourceTree = "<group>";
+		};
+		FC578879302F1A4F004A2D54 /* Widget */ = {
+			isa = PBXGroup;
+			children = (
+				FC57887F302F1AF6004A2D54 /* WidgetSnapshot.swift */,
+			);
+			path = Widget;
+			sourceTree = "<group>";
+		};
+		FC74E5762F26C025001F65EE /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				FC74E5772F26C025001F65EE /* WidgetKit.framework */,
+				FC74E5792F26C025001F65EE /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		FC7C197F2F05531500E65175 = {
 			isa = PBXGroup;
 			children = (
+				FC1E71AE2F5CA98900B50209 /* FocusWidgetExtension.entitlements */,
+				FC1E71AD2F5CA95500B50209 /* Focuslly.entitlements */,
 				FC7C198A2F05531500E65175 /* Personal Productivity */,
+				FC74E5762F26C025001F65EE /* Frameworks */,
 				FC7C19892F05531500E65175 /* Products */,
+				FCFD27BB2F5D8A63008E3047 /* Recovered References */,
+				FC578874302F1A49004A2D54 /* FocusllyCore */,
 			);
 			sourceTree = "<group>";
 		};
 		FC7C19892F05531500E65175 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				FC7C19882F05531500E65175 /* Personal Productivity.app */,
+				FC7C19882F05531500E65175 /* Focuslly.app */,
+				AA000001000000000000AA05 /* FocusWidgetExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		FCFD27BB2F5D8A63008E3047 /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				AA000001000000000000BB01 /* FocusWidgetExtension */,
+			);
+			name = "Recovered References";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		FC7C19872F05531500E65175 /* Personal Productivity */ = {
+		AA000001000000000000AA01 /* FocusWidgetExtension */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = FC7C19932F05531700E65175 /* Build configuration list for PBXNativeTarget "Personal Productivity" */;
+			buildConfigurationList = AA000001000000000000AA10 /* Build configuration list for PBXNativeTarget "FocusWidgetExtension" */;
 			buildPhases = (
-				FC7C19842F05531500E65175 /* Sources */,
-				FC7C19852F05531500E65175 /* Frameworks */,
-				FC7C19862F05531500E65175 /* Resources */,
+				AA000001000000000000AA02 /* Sources */,
+				AA000001000000000000AA04 /* Frameworks */,
+				AA000001000000000000AA03 /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
+				AA000001000000000000BB01 /* FocusWidgetExtension */,
+			);
+			name = FocusWidgetExtension;
+			productName = FocusWidgetExtension;
+			productReference = AA000001000000000000AA05 /* FocusWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		FC7C19872F05531500E65175 /* Focuslly */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FC7C19932F05531700E65175 /* Build configuration list for PBXNativeTarget "Focuslly" */;
+			buildPhases = (
+				FC7C19842F05531500E65175 /* Sources */,
+				FC7C19852F05531500E65175 /* Frameworks */,
+				FC7C19862F05531500E65175 /* Resources */,
+				AA000001000000000000AA15 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AA000001000000000000AA13 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
 				FC7C198A2F05531500E65175 /* Personal Productivity */,
 			);
-			name = "Personal Productivity";
+			name = Focuslly;
 			packageProductDependencies = (
 			);
 			productName = "Personal Productivity";
-			productReference = FC7C19882F05531500E65175 /* Personal Productivity.app */;
+			productReference = FC7C19882F05531500E65175 /* Focuslly.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -80,6 +254,9 @@
 				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
+					AA000001000000000000AA01 = {
+						CreatedOnToolsVersion = 26.2;
+					};
 					FC7C19872F05531500E65175 = {
 						CreatedOnToolsVersion = 26.2;
 					};
@@ -99,12 +276,20 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				FC7C19872F05531500E65175 /* Personal Productivity */,
+				FC7C19872F05531500E65175 /* Focuslly */,
+				AA000001000000000000AA01 /* FocusWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		AA000001000000000000AA03 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		FC7C19862F05531500E65175 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -115,6 +300,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		AA000001000000000000AA02 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		FC7C19842F05531500E65175 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -124,7 +316,65 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		AA000001000000000000AA13 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AA000001000000000000AA01 /* FocusWidgetExtension */;
+			targetProxy = AA000001000000000000AA14 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		AA000001000000000000AA11 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = FocusWidgetExtension/FocusWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = 73TNC96NHR;
+				INFOPLIST_FILE = FocusWidgetExtension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.karlo.personalproductivity.Personal-Productivity.FocusWidget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		AA000001000000000000AA12 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = FocusWidgetExtension/FocusWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = 73TNC96NHR;
+				INFOPLIST_FILE = FocusWidgetExtension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.karlo.personalproductivity.Personal-Productivity.FocusWidget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		FC7C19912F05531700E65175 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -249,10 +499,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Focuslly.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = 73TNC96NHR;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Personal Productivity/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Focuslly;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -262,9 +516,10 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.karlo.personalproductivity.Personal-Productivity";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -280,10 +535,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Focuslly.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = 73TNC96NHR;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Personal Productivity/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Focuslly;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -293,9 +552,10 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.karlo.personalproductivity.Personal-Productivity";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -309,6 +569,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		AA000001000000000000AA10 /* Build configuration list for PBXNativeTarget "FocusWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA000001000000000000AA11 /* Debug */,
+				AA000001000000000000AA12 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		FC7C19832F05531500E65175 /* Build configuration list for PBXProject "Personal Productivity" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -318,7 +587,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		FC7C19932F05531700E65175 /* Build configuration list for PBXNativeTarget "Personal Productivity" */ = {
+		FC7C19932F05531700E65175 /* Build configuration list for PBXNativeTarget "Focuslly" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				FC7C19942F05531700E65175 /* Debug */,
