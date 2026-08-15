@@ -1,7 +1,7 @@
 import Foundation
 import WidgetKit
 
-// MARK: - Shared widget data (widget-side copy — keep in sync with main app's FocusWidgetData.swift)
+// MARK: - Shared widget data (widget-side copy — keep in sync with main app’s FocusWidgetData.swift)
 struct FocusWidgetData: Codable {
     enum BlockKind: String, Codable {
         case focus
@@ -21,8 +21,7 @@ struct FocusWidgetData: Codable {
     static let appGroupID      = "group.com.karlo.personalproductivity.focus"
 
     // Must be called on the main actor: WidgetCenter.shared is not Sendable and
-    // reloadTimelines internally dispatches UI work. Callers off the main thread
-    // should wrap in Task { @MainActor in ... }.
+    // reloadTimelines internally dispatches UI work.
     @MainActor
     static func write(_ data: FocusWidgetData) {
         guard let defaults = UserDefaults(suiteName: appGroupID) else { return }
@@ -32,7 +31,6 @@ struct FocusWidgetData: Codable {
         WidgetCenter.shared.reloadTimelines(ofKind: "FocusWidget")
     }
 
-    // Must be called on the main actor: see write(_:) above.
     @MainActor
     static func clear() {
         guard let defaults = UserDefaults(suiteName: appGroupID) else { return }
@@ -40,10 +38,7 @@ struct FocusWidgetData: Codable {
         WidgetCenter.shared.reloadTimelines(ofKind: "FocusWidget")
     }
 
-    // Fix #1: When the stored entry is stale (endDate more than 120 s in the past)
-    // remove it from UserDefaults immediately so subsequent timeline reloads do not
-    // repeatedly decode and discard the same dead payload. Previously the stale key
-    // persisted until the main app called clear() explicitly.
+    // Evict stale entry immediately on read.
     static func read() -> FocusWidgetData? {
         guard let defaults = UserDefaults(suiteName: appGroupID),
               let data = defaults.data(forKey: userDefaultsKey),
@@ -58,30 +53,39 @@ struct FocusWidgetData: Codable {
 }
 
 // MARK: - Idle-state insights
-struct FocusWidgetInsights: Codable {
-    var dialsToday: Int        = 0
-    var dialTarget: Int        = 55
-    var sessionsToday: Int     = 0
-    var focusMinutesToday: Int = 0
-    var hotLeadsCount: Int     = 0
-    var pendingActions: Int    = 0
-    var currentStreak: Int     = 0
-    /// UTC timestamp of when this snapshot was written. Used by read() to reject stale data.
-    var writtenAt: Date        = Date()
+//
+// This struct is the widget-extension mirror of the main-app copy.
+// Keep fields and static constants in sync with
+// Personal Productivity/FocusWidgetData.swift.
+// Persistence write path lives in the main app (LiveWidgetInsightsPersistence);
+// the extension only reads.
+struct FocusWidgetInsights: Codable, Equatable {
 
-    /// Maximum age before insights are considered stale and discarded.
+    // MARK: Task state
+    var pendingTaskCount: Int   = 0
+    var completedToday: Int     = 0
+    var currentTaskTitle: String?
+    var nextTaskTitle: String?
+
+    // MARK: Session state
+    var focusMinutesToday: Int  = 0
+    var weeklyStreakDays: Int    = 0
+
+    // MARK: Metadata
+    /// UTC timestamp written by the coordinator at persistence time.
+    var lastUpdated: Date       = Date()
+
     static let stalenessWindow: TimeInterval = 4 * 60 * 60 // 4 hours
-
     static let userDefaultsKey = "focusWidgetInsights"
 
-    // Fix #2: Reject insights that are older than stalenessWindow so the widget
-    // never silently shows yesterday's dial count or streak as if current.
+    /// Reads insights from the shared suite, discarding the entry if it is
+    /// older than `stalenessWindow` so the widget never shows stale data.
     static func read() -> FocusWidgetInsights? {
         guard let defaults = UserDefaults(suiteName: FocusWidgetData.appGroupID),
-              let data = defaults.data(forKey: userDefaultsKey),
+              let data    = defaults.data(forKey: userDefaultsKey),
               let decoded = try? JSONDecoder().decode(FocusWidgetInsights.self, from: data)
         else { return nil }
-        guard Date().timeIntervalSince(decoded.writtenAt) < stalenessWindow else {
+        guard Date().timeIntervalSince(decoded.lastUpdated) < stalenessWindow else {
             defaults.removeObject(forKey: userDefaultsKey)
             return nil
         }
