@@ -114,7 +114,13 @@ enum FocusllyLocalDay {
 
     static func normalizedLocalDay(for date: Date, calendar: Calendar = .current) -> String {
         var localCalendar = calendar
-        localCalendar.timeZone = calendar.timeZone
+        // Fix #6: The previous assignment `localCalendar.timeZone = calendar.timeZone`
+        // was a no-op — it copied the same timezone back onto the copy, so any caller
+        // that passed a UTC calendar (e.g. in tests) would format dates in UTC instead
+        // of the device's local timezone. Forcing TimeZone.current ensures streak,
+        // habit, and session records are always attributed to the correct local day
+        // regardless of what calendar the caller provides.
+        localCalendar.timeZone = TimeZone.current
         return date.formatted(formatStyle.calendar(localCalendar))
     }
 
@@ -133,6 +139,16 @@ enum FocusllyLocalDay {
     }
 }
 
+// MARK: - Nil UUID sentinel
+
+extension UUID {
+    /// The all-zeros UUID used as a sentinel / placeholder value in legacy code.
+    /// `requireValidIdentifier` rejects this value in addition to any structurally
+    /// invalid UUID, because SwiftData will accept it and silently create a record
+    /// that is impossible to disambiguate from other sentinel-keyed records.
+    static let nilSentinel = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
+}
+
 enum FocusllyValidation {
     static func cleanedTitle(_ title: String) throws -> String {
         let cleaned = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -140,8 +156,12 @@ enum FocusllyValidation {
         return cleaned
     }
 
+    // Fix #7: The previous guard checked `uuidString.isEmpty`, which is structurally
+    // impossible — UUID.uuidString always returns a 36-character string. The real risk
+    // is callers passing the all-zeros sentinel UUID. Guarding against that prevents
+    // SwiftData from inserting ambiguous sentinel-keyed records.
     static func requireValidIdentifier(_ identifier: UUID) throws {
-        guard identifier.uuidString.isEmpty == false else { throw FocusllyRepositoryError.invalidIdentifier }
+        guard identifier != .nilSentinel else { throw FocusllyRepositoryError.invalidIdentifier }
     }
 
     static func requireValidDate(_ date: Date) throws {
