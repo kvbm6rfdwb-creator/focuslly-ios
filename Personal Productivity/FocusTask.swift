@@ -66,7 +66,7 @@ struct FocusTask: Identifiable, Codable, Hashable {
         focusPlan.name
     }
 
-    // Hashable samo po ID-u
+    // Hashable by ID only
     static func == (lhs: FocusTask, rhs: FocusTask) -> Bool {
         lhs.id == rhs.id
     }
