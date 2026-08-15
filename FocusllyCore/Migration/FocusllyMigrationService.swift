@@ -93,6 +93,11 @@ final class SwiftDataMigrationService: MigrationService {
             deferredAdapters: [
                 "FocusTask adapter deferred: V1 keeps legacyTaskID and legacyTaskTitle fields for lossless FocusSessionRecord import later.",
                 "FocusSessionLog adapter deferred: exitReason raw value, intention, rating, and task title joins require an explicit product-approved mapping pass.",
+                // Fix #3: explicit TODO so this intentional debt is visible in the
+                // Issues navigator and cannot be silently shipped without a decision.
+                // TODO(migration-v2): After full adapter pass is approved and shipped,
+                // delete the legacy UserDefaults keys ("focus_tasks", "focus_session_logs")
+                // so the device does not retain orphaned plaintext data indefinitely.
                 "Legacy UserDefaults data is read-only in this scaffold and is never deleted or overwritten."
             ]
         )
@@ -117,10 +122,20 @@ final class SwiftDataMigrationService: MigrationService {
         return report
     }
 
+    // Fix #1: Use a #Predicate-based FetchDescriptor instead of fetching all
+    // AppMigrationRecord rows and filtering in Swift. This keeps the fetch O(1)
+    // regardless of how many migration records accumulate over time.
     private func existingMigrationRecord(named name: String) throws -> AppMigrationRecord? {
-        try context.fetch(FetchDescriptor<AppMigrationRecord>()).first { $0.migrationName == name }
+        var descriptor = FetchDescriptor<AppMigrationRecord>(
+            predicate: #Predicate { $0.migrationName == name }
+        )
+        descriptor.fetchLimit = 1
+        return try context.fetch(descriptor).first
     }
 
+    // Fix #2: Include the real decode error message in the quarantine reason.
+    // Previously error.localizedDescription was silently dropped, making the
+    // quarantine audit trail useless for diagnosing what actually went wrong.
     private func decodeLegacyArray<T: Decodable>(
         _ type: T.Type,
         key: String,
@@ -133,7 +148,7 @@ final class SwiftDataMigrationService: MigrationService {
             quarantined.append(
                 LegacyQuarantinedRecord(
                     sourceKey: key,
-                    reason: "Unable to decode legacy payload as \(T.self). Content omitted from diagnostics."
+                    reason: "Unable to decode legacy payload as \(T.self): \(error.localizedDescription)"
                 )
             )
             return nil
