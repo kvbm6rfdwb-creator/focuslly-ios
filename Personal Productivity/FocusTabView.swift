@@ -9,7 +9,7 @@ struct FocusTabView: View {
     var body: some View {
         NavigationStack {
             if let task = taskStore.activeFocusTask {
-                FocusEngineHostView(task: task) { _ in }
+                FocusEngineHostView(task: task)
                     .id(task.id)
             } else {
                 FocusIdleView()
@@ -18,7 +18,16 @@ struct FocusTabView: View {
                     .navigationBarTitleDisplayMode(.inline)
             }
         }
-        .sheet(item: $taskStore.pendingChainTask) { next in
+        // Fix #6: suppress sheet when intention is already stored — .onChange handles that fast
+        // path. Sheet only presents when user input is still required. This eliminates the
+        // double-start race where both paths fired simultaneously.
+        .sheet(item: Binding<FocusTask?>(
+            get: {
+                guard let next = taskStore.pendingChainTask else { return nil }
+                return SessionIntentionStore.shared.get(for: next.id) == nil ? next : nil
+            },
+            set: { _ in }
+        )) { next in
             SessionPreparationSheet(task: next) { intention in
                 if let intention, !intention.isEmpty {
                     SessionIntentionStore.shared.set(intention, for: next.id)
@@ -30,10 +39,10 @@ struct FocusTabView: View {
         }
         .onChange(of: taskStore.pendingChainTask) { _, next in
             guard let next else { return }
-            if SessionIntentionStore.shared.get(for: next.id) != nil {
-                coordinator.startFocus(task: next)
-                taskStore.confirmChainTask(next)
-            }
+            // Only fast-path when intention is already stored; sheet handles the other case.
+            guard SessionIntentionStore.shared.get(for: next.id) != nil else { return }
+            coordinator.startFocus(task: next)
+            taskStore.confirmChainTask(next)
         }
     }
 }
@@ -50,6 +59,10 @@ private struct FocusIdleView: View {
     @State private var quickStartPreset: AppSettingsStore.QuickStartTaskPreset? = nil
     @State private var showMealLog = false
     @State private var mealTick = 0
+    // Fix #3: ratings dict cached in @State; reloaded on appear and on session log changes,
+    // not decoded from UserDefaults on every render pass.
+    @State private var sessionRatings: [String: String] = [:]
+
     private var mealStore: MealStore { MealStore.shared }
 
     // MARK: - Recommended task
@@ -78,9 +91,11 @@ private struct FocusIdleView: View {
 
     // MARK: - Daily progress
 
-    /// Distinct task IDs that have a completed or prolonged session log today.
-    private var completedTodayTaskIds: Set<UUID> {
-        Set(
+    // Fix #4: single computed property that derives the full Set once; all dependent
+    // properties read todayProgress so completedTodayTaskIds is never built more than
+    // once per body evaluation.
+    private var todayProgress: (done: Int, total: Int, focusMinutes: Int) {
+        let doneIds: Set<UUID> = Set(
             taskStore.sessionLogs
                 .filter {
                     ($0.exitReason == .completed || $0.exitReason == .prolonged)
@@ -88,31 +103,28 @@ private struct FocusIdleView: View {
                 }
                 .map { $0.taskId }
         )
-    }
-
-    private var todayDone: Int { completedTodayTaskIds.count }
-
-    private var pendingTodayTasks: [FocusTask] {
+        let done = doneIds.count
         let calendar = Calendar.current
         let todayStart = calendar.startOfDay(for: Date())
         let tomorrowStart = calendar.date(byAdding: .day, value: 1, to: todayStart) ?? todayStart
-        let doneIds = completedTodayTaskIds
-        return taskStore.tasks.filter { task in
+        let pending = taskStore.tasks.filter { task in
             guard task.status == .pending, !doneIds.contains(task.id) else { return false }
             let taskDate = task.scheduledTime ?? task.startDate
             return taskDate < tomorrowStart
-        }
-    }
-
-    private var todayTotal: Int { todayDone + pendingTodayTasks.count }
-
-    private var focusMinutesToday: Int {
-        taskStore.sessionLogs
+        }.count
+        let mins = taskStore.sessionLogs
             .filter {
                 ($0.exitReason == .completed || $0.exitReason == .prolonged)
                 && Calendar.current.isDateInToday($0.startDate)
             }
             .reduce(0) { $0 + $1.durationMinutes }
+        return (done: done, total: done + pending, focusMinutes: mins)
+    }
+
+    // MARK: - Ratings cache helper
+    private func reloadRatings() {
+        sessionRatings = (UserDefaults.standard.dictionary(forKey: SessionRatingSheet.ratingsKey)
+            as? [String: String]) ?? [:]
     }
 
     var body: some View {
@@ -133,7 +145,10 @@ private struct FocusIdleView: View {
         }
         .onAppear {
             withAnimation(.easeOut(duration: 0.5)) { appeared = true }
+            reloadRatings() // Fix #3
         }
+        // Fix #3: refresh ratings cache whenever session logs change.
+        .onChange(of: taskStore.sessionLogs) { _, _ in reloadRatings() }
         .sheet(item: $preparingTask) { task in
             SessionPreparationSheet(task: task) { intention in
                 taskStore.startFocus(task: task)
@@ -292,10 +307,12 @@ private struct FocusIdleView: View {
 
     // MARK: - Daily progress card
     private var dailyProgressCard: some View {
-        let total    = todayTotal
-        let done     = todayDone
+        // Fix #4: single call; no repeated Set construction.
+        let stats    = todayProgress
+        let total    = stats.total
+        let done     = stats.done
         let progress = total > 0 ? Double(done) / Double(total) : 0.0
-        let mins     = focusMinutesToday
+        let mins     = stats.focusMinutes
 
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -411,7 +428,8 @@ private struct FocusIdleView: View {
                 && Calendar.current.isDateInToday($0.startDate)
             }
             .sorted { $0.startDate > $1.startDate }
-        let ratings = (UserDefaults.standard.dictionary(forKey: SessionRatingSheet.ratingsKey) as? [String: String]) ?? [:]
+        // Fix #3: use cached @State value — no UserDefaults decode on render.
+        let ratings = sessionRatings
 
         return Group {
             if !todaySessions.isEmpty {
@@ -571,6 +589,11 @@ private struct QuickStartSheet: View {
 
     private var intentionPresets: [String] { settings.intentionPresets }
 
+    // Fix #5: snap any value not present in steps to the nearest valid entry.
+    private func nearestStep(to value: Int) -> Int {
+        steps.min(by: { abs($0 - value) < abs($1 - value) }) ?? value
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
@@ -646,20 +669,24 @@ private struct QuickStartSheet: View {
 
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
-                                let chips = settings.setTimePresets.isEmpty ? [15, 25, 30, 45, 60, 90] : settings.setTimePresets.map(\.minutes)
+                                let chips = settings.setTimePresets.isEmpty
+                                    ? [15, 25, 30, 45, 60, 90]
+                                    : settings.setTimePresets.map(\.minutes)
                                 ForEach(chips, id: \.self) { m in
                                     Button {
                                         HapticManager.impact()
-                                        minutes = m
+                                        // Fix #5: always land on a value steps knows about.
+                                        minutes = nearestStep(to: m)
                                     } label: {
+                                        let snapped = nearestStep(to: m)
                                         Text("\(m)m")
                                             .font(.system(size: 13, weight: .semibold))
                                             .padding(.horizontal, 14)
                                             .padding(.vertical, 8)
-                                            .background(minutes == m ? preset.color : Color(uiColor: .tertiarySystemFill))
-                                            .foregroundStyle(minutes == m ? .white : .primary)
+                                            .background(minutes == snapped ? preset.color : Color(uiColor: .tertiarySystemFill))
+                                            .foregroundStyle(minutes == snapped ? .white : .primary)
                                             .clipShape(Capsule())
-                                            .animation(.easeInOut(duration: 0.15), value: minutes == m)
+                                            .animation(.easeInOut(duration: 0.15), value: minutes == snapped)
                                     }
                                     .buttonStyle(.plain)
                                 }
@@ -743,31 +770,40 @@ private struct QuickStartSheet: View {
         .floatingKeyboardDismiss(isVisible: intentionFocused)
         .presentationDetents([.fraction(0.82)])
         .presentationDragIndicator(.visible)
+        .onAppear {
+            // Fix #5: snap initial value on sheet open in case preset.defaultMinutes
+            // is not already in steps.
+            minutes = nearestStep(to: minutes)
+        }
     }
 }
 
 // MARK: - FocusEngineHostView
+// Fix #1: engine is initialised with taskStore: nil (idle, no timer). setTaskStore() is called
+// first in onAppear, then FocusView.onAppear calls engine.start() — guaranteeing taskStore is
+// non-nil before the first tick can fire.
+//
+// Fix #2: onExit closure removed from this view's public API. The original call site always
+// passed { _ in }, making it dead API. Exit routing is owned entirely by FocusView and
+// FocusSessionCoordinator; surfacing it here created a misleading seam. Removing it makes
+// ownership unambiguous and eliminates the risk of a future caller accidentally shadowing
+// the coordinator's exit handling.
 private struct FocusEngineHostView: View {
     let task: FocusTask
-    let onExit: (FocusSessionExit) -> Void
 
     @EnvironmentObject private var taskStore: TaskStore
     @StateObject private var engine: FocusSessionEngine
 
-    init(task: FocusTask, onExit: @escaping (FocusSessionExit) -> Void) {
+    init(task: FocusTask) {
         self.task = task
-        self.onExit = onExit
-        // TaskStore is injected via setTaskStore() in onAppear, which is guaranteed
-        // to fire before the engine's first tick because start() is called from
-        // FocusView.onAppear — both onAppear callbacks run synchronously on the main
-        // run loop before the next timer tick fires.
         _engine = StateObject(wrappedValue: FocusSessionEngine(task: task, taskStore: nil))
     }
 
     var body: some View {
-        FocusView(engine: engine, onExit: onExit)
+        FocusView(engine: engine)
             .onAppear {
-                // Wire the store before FocusView.onAppear calls engine.start().
+                // Wire store first — engine.start() (called inside FocusView.onAppear)
+                // is guaranteed to see a non-nil taskStore from this point on.
                 engine.setTaskStore(taskStore)
             }
             .id(engine.task.id)
