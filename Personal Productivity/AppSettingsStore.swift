@@ -80,7 +80,7 @@ final class AppSettingsStore: ObservableObject {
         }
     }
 
-    // Daily focus goals (minutes). Defaults: 600 min (10h) weekday, 480 min (8h) weekend.
+    // Daily focus goals (minutes). Defaults: 240 min (4h) weekday, 120 min (2h) weekend.
     @Published var dailyFocusGoalWeekday: Int {
         didSet { UserDefaults.standard.set(dailyFocusGoalWeekday, forKey: Keys.dailyFocusGoalWeekday) }
     }
@@ -248,8 +248,8 @@ final class AppSettingsStore: ObservableObject {
     init() {
         self.hapticsEnabled = UserDefaults.standard.object(forKey: Keys.hapticsEnabled) as? Bool ?? true
         self.soundsEnabled = UserDefaults.standard.object(forKey: Keys.soundsEnabled) as? Bool ?? true
-        self.dailyFocusGoalWeekday = UserDefaults.standard.object(forKey: Keys.dailyFocusGoalWeekday) as? Int ?? 600
-        self.dailyFocusGoalWeekend = UserDefaults.standard.object(forKey: Keys.dailyFocusGoalWeekend) as? Int ?? 480
+        self.dailyFocusGoalWeekday = UserDefaults.standard.object(forKey: Keys.dailyFocusGoalWeekday) as? Int ?? 240
+        self.dailyFocusGoalWeekend = UserDefaults.standard.object(forKey: Keys.dailyFocusGoalWeekend) as? Int ?? 120
         self.notificationsReminders = UserDefaults.standard.object(forKey: "settings_notifications_reminders") as? Bool ?? true
         self.notificationsDailySummary = UserDefaults.standard.object(forKey: "settings_notifications_daily_summary") as? Bool ?? true
         self.notificationsFocusStart = UserDefaults.standard.object(forKey: "settings_notifications_focus_start") as? Bool ?? true
@@ -359,15 +359,6 @@ final class AppSettingsStore: ObservableObject {
         }
     }
 
-    // MARK: - Accessibility Application
-    func applyAccessibilitySettings() {
-        // Font size: Use environment or custom modifier in views
-        // High contrast: Use environment or custom modifier in views
-        // Reduce motion: Use environment or custom modifier in views
-        // VoiceOver: Use environment or custom modifier in views
-        // This method can be called from main views to update UI
-    }
-
     // MARK: - Reset All
     func resetAll() {
         hapticsEnabled = true
@@ -382,8 +373,8 @@ final class AppSettingsStore: ObservableObject {
         reduceMotion = false
         voiceOverSupport = false
         syncedCalendarIDs = []
-        dailyFocusGoalWeekday = 600
-        dailyFocusGoalWeekend = 480
+        dailyFocusGoalWeekday = 240
+        dailyFocusGoalWeekend = 120
         trainingDaysPerWeek = 3
         trainingWeekdays = [2, 4, 6]
         trainingStreakMode = .anyPhysicalTask
