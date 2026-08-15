@@ -21,6 +21,11 @@ struct FocusWidget: Widget {
 }
 
 // MARK: - Preview
+// Fix #4 (doc): dialsToday / dialTarget / hotLeadsCount values below are legacy
+// sales-pipeline placeholders carried over from the pre-Focuslly codebase.
+// TODO(preview-cleanup): Replace with representative habit-tracking values
+// (completedCount, plannedCount, currentStreak) once FocusWidgetInsights is
+// aligned with the Focuslly WidgetSnapshot model.
 #Preview(as: .systemSmall) {
     FocusWidget()
 } timeline: {
