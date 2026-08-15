@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import WidgetKit
 
 final class TaskStore: ObservableObject {
     // MARK: - Dependencies
@@ -209,6 +210,15 @@ final class TaskStore: ObservableObject {
            task.pipelineCategory != nil {
             PipelineStore.shared.recordTaskCompletion(task: task, durationMinutes: max(1, log.durationMinutes))
         }
+
+        // Wire insights: after every session log, push a fresh snapshot to the
+        // widget's App Group so the idle panel reflects up-to-date stats.
+        // FocusWidgetInsights.write() owns the single reloadTimelines call —
+        // do NOT add another one here.
+        // Only completed/prolonged sessions change today's visible stats, but we
+        // write on every exit so the widget clears a stale session-in-progress
+        // display even when the user abandons the session early.
+        Task { @MainActor in self.writeInsightsSnapshot() }
     }
 
     // MARK: - Daily Streak
@@ -536,5 +546,38 @@ final class TaskStore: ObservableObject {
         }
 
         return decisions
+    }
+
+    // MARK: - Widget insights snapshot
+    /// Assembles a FocusWidgetInsights value from current store state and writes it
+    /// to the shared App Group. Must be called on the main actor because
+    /// FocusWidgetInsights.write() is @MainActor.
+    ///
+    /// Call sites:
+    ///   • logSession()      — after every session ends
+    ///   • DashboardViewModel.recalculate() — after stats recompute
+    @MainActor
+    func writeInsightsSnapshot() {
+        let today = Calendar.current.startOfDay(for: Date())
+        let sessions = completedSessionsToday(referenceDate: today)
+        let minutes  = focusedMinutesToday(referenceDate: today)
+        let streak   = strictDailyStreak
+
+        // pendingActions = number of pending tasks due today or earlier.
+        let pending = tasks.filter { task in
+            guard task.status == .pending else { return false }
+            let d = task.scheduledTime ?? task.startDate
+            return Calendar.current.startOfDay(for: d) <= today
+        }.count
+
+        var insights = FocusWidgetInsights()
+        insights.sessionsToday     = sessions
+        insights.focusMinutesToday = minutes
+        insights.currentStreak     = streak
+        insights.pendingActions    = pending
+        insights.writtenAt         = Date()
+        // dialsToday / dialTarget / hotLeadsCount remain 0 until
+        // a PipelineStore-aware layer populates them.
+        FocusWidgetInsights.write(insights)
     }
 }

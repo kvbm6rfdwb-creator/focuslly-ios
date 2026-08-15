@@ -127,9 +127,6 @@ final class DashboardViewModel: ObservableObject {
         }
 
         // Rate % — denominator: tasks the user is responsible for today
-        //   • pending tasks scheduled today or overdue (carried forward)
-        //   • tasks completed today (have a completed session log today)
-        // This way the denominator never includes stale completed tasks from previous days.
         let tomorrow = cal.date(byAdding: .day, value: 1, to: today) ?? today
 
         let completedTodayIDs = Set(
@@ -141,9 +138,9 @@ final class DashboardViewModel: ObservableObject {
         let rateDenominatorTasks = taskStore.tasks.filter { task in
             let s = task.scheduledTime ?? task.startDate
             if task.status == .pending {
-                return s < tomorrow          // pending today or overdue
+                return s < tomorrow
             } else {
-                return completedTodayIDs.contains(task.id)  // completed in today's session
+                return completedTodayIDs.contains(task.id)
             }
         }
 
@@ -163,6 +160,11 @@ final class DashboardViewModel: ObservableObject {
             guard task.status == .pending, let s = task.scheduledTime else { return false }
             return s >= tomorrow && s < in7days
         }.sorted { ($0.scheduledTime ?? $0.startDate) < ($1.scheduledTime ?? $1.startDate) }
+
+        // Wire insights: push a fresh snapshot whenever the dashboard recomputes.
+        // recalculate() is always called on the main queue (via .receive(on: DispatchQueue.main))
+        // so writeInsightsSnapshot() can be called directly without an extra Task hop.
+        taskStore.writeInsightsSnapshot()
     }
 
     // MARK: - Card order persistence
@@ -174,7 +176,6 @@ final class DashboardViewModel: ObservableObject {
               let decoded = try? JSONDecoder().decode([CardID].self, from: data) else {
             return CardID.allCases
         }
-        // Merge: keep saved order but append any new cards not yet in saved list
         var merged = decoded
         for c in CardID.allCases where !merged.contains(c) { merged.append(c) }
         return merged
