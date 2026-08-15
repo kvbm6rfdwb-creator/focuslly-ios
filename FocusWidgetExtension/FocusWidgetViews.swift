@@ -20,15 +20,27 @@ private func formatSeconds(_ seconds: Int) -> String {
     return String(format: "%02d:%02d", s / 60, s % 60)
 }
 
+// Fix #7 + #8: Single shared helper that computes the paused arc progress from
+// a FocusWidgetData value. Eliminates the three-line duplication across
+// FocusWidgetHomeScreen, FocusWidgetCircular, and FocusWidgetRectangular, and
+// guards against elapsed going negative when pausedRemainingSeconds exceeds the
+// total interval (e.g. due to a bug in the main app writing inconsistent data).
+private func pausedProgress(for data: FocusWidgetData) -> Double {
+    let total = max(1, data.endDate.timeIntervalSince(data.startDate))
+    let remaining = max(0, TimeInterval(data.pausedRemainingSeconds))
+    let elapsed = max(0, total - remaining)
+    return min(1, elapsed / total)
+}
+
 // MARK: - Root view
 struct FocusWidgetEntryView: View {
     let entry: FocusWidgetEntry
     @Environment(\.widgetFamily) private var family
     var body: some View {
         switch family {
-        case .accessoryCircular:   FocusWidgetCircular(entry: entry)
+        case .accessoryCircular:    FocusWidgetCircular(entry: entry)
         case .accessoryRectangular: FocusWidgetRectangular(entry: entry)
-        default:                   FocusWidgetHomeScreen(entry: entry)
+        default:                    FocusWidgetHomeScreen(entry: entry)
         }
     }
 }
@@ -59,7 +71,6 @@ struct FocusWidgetHomeScreen: View {
                         }
                     }
                     Spacer(minLength: 0)
-                    // Static label when paused; live countdown when running
                     if data.isPaused {
                         Text(formatSeconds(data.pausedRemainingSeconds))
                             .font(.system(size: 44, weight: .bold, design: .monospaced))
@@ -94,7 +105,7 @@ struct FocusWidgetHomeScreen: View {
 
                 VStack(alignment: .leading, spacing: 0) {
 
-                    // ── Brand row ──────────────────────────────────
+                    // ── Brand row ──────────────────────────────────────────────
                     HStack(spacing: 4) {
                         Image(systemName: "bolt.fill")
                             .font(.system(size: 7, weight: .black))
@@ -103,7 +114,6 @@ struct FocusWidgetHomeScreen: View {
                             .font(.system(size: 7.5, weight: .heavy)).tracking(1.8)
                             .foregroundStyle(.white.opacity(0.22))
                         Spacer()
-                        // Live progress pill
                         HStack(spacing: 3) {
                             Circle()
                                 .fill(dialColor)
@@ -119,7 +129,7 @@ struct FocusWidgetHomeScreen: View {
 
                     Spacer(minLength: 8)
 
-                    // ── Hero dial count ────────────────────────────
+                    // ── Hero dial count ─────────────────────────────────────────
                     HStack(alignment: .lastTextBaseline, spacing: 3) {
                         Text("\(ins.dialsToday)")
                             .font(.system(size: 42, weight: .black, design: .rounded))
@@ -136,7 +146,7 @@ struct FocusWidgetHomeScreen: View {
 
                     Spacer(minLength: 6)
 
-                    // ── Progress track ─────────────────────────────
+                    // ── Progress track ─────────────────────────────────────────
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
                             Capsule().fill(.white.opacity(0.05)).frame(height: 3)
@@ -151,7 +161,7 @@ struct FocusWidgetHomeScreen: View {
 
                     Spacer(minLength: 9)
 
-                    // ── Secondary stats ────────────────────────────
+                    // ── Secondary stats ─────────────────────────────────────────
                     HStack(spacing: 0) {
                         idleStatMini(
                             icon: "bolt.fill",
@@ -214,14 +224,10 @@ struct FocusWidgetCircular: View {
     var body: some View {
         ZStack {
             if let data = entry.widgetData {
-                // ── ACTIVE ──
                 if data.isPaused {
-                    // Static ring + frozen time
+                    // Fix #7+#8: Use shared pausedProgress(for:) helper.
+                    let progress = pausedProgress(for: data)
                     ZStack {
-                        // Fixed-progress arc at the paused position
-                        let total = max(1, data.endDate.timeIntervalSince(data.startDate))
-                        let elapsed = total - TimeInterval(data.pausedRemainingSeconds)
-                        let progress = min(1, max(0, elapsed / total))
                         Circle().stroke(.white.opacity(0.08), lineWidth: 4).padding(4)
                         Circle()
                             .trim(from: 0, to: progress)
@@ -253,18 +259,14 @@ struct FocusWidgetCircular: View {
                 }
 
             } else if let ins = entry.insights {
-                // ── IDLE — dial ring ──
                 let progress = ins.dialTarget > 0 ? min(Double(ins.dialsToday) / Double(ins.dialTarget), 1.0) : 0
                 let ringColor: Color = progress >= 1 ? .green : .orange
                 ZStack {
-                    // Track
                     Circle().stroke(.white.opacity(0.08), lineWidth: 5)
-                    // Fill
                     Circle()
                         .trim(from: 0, to: progress)
                         .stroke(ringColor, style: StrokeStyle(lineWidth: 5, lineCap: .round))
                         .rotationEffect(.degrees(-90))
-                    // Centre
                     VStack(spacing: -1) {
                         Text("\(ins.dialsToday)")
                             .font(.system(size: 16, weight: .black, design: .rounded))
@@ -292,13 +294,10 @@ struct FocusWidgetRectangular: View {
     var body: some View {
         ZStack {
             if let data = entry.widgetData {
-                // ── ACTIVE ──
                 HStack(spacing: 10) {
                     if data.isPaused {
-                        // Static progress circle
-                        let total = max(1, data.endDate.timeIntervalSince(data.startDate))
-                        let elapsed = total - TimeInterval(data.pausedRemainingSeconds)
-                        let progress = min(1, max(0, elapsed / total))
+                        // Fix #7+#8: Use shared pausedProgress(for:) helper.
+                        let progress = pausedProgress(for: data)
                         ZStack {
                             Circle().stroke(.white.opacity(0.1), lineWidth: 3)
                             Circle()
@@ -353,12 +352,10 @@ struct FocusWidgetRectangular: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
 
             } else if let ins = entry.insights {
-                // ── IDLE — 3 columns with progress bar accent ──
                 let dp = ins.dialTarget > 0 ? min(Double(ins.dialsToday) / Double(ins.dialTarget), 1.0) : 0
                 let dc: Color = dp >= 1 ? .green : dp >= 0.5 ? .orange : Color(red: 1, green: 0.45, blue: 0.2)
 
                 VStack(spacing: 4) {
-                    // Thin progress bar across full width
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
                             Capsule().fill(.white.opacity(0.05)).frame(height: 2)
@@ -372,7 +369,6 @@ struct FocusWidgetRectangular: View {
                     .frame(height: 2)
                     .padding(.horizontal, 10)
 
-                    // 3 stat cells
                     HStack(spacing: 0) {
                         rectStatCell(
                             icon: "phone.fill", color: dc,
