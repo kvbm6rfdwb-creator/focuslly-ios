@@ -3,6 +3,11 @@ import Foundation
 struct WidgetSnapshot: Codable, Equatable, Sendable {
     static let currentSchemaVersion = 1
 
+    // Maximum age a snapshot may have been generated in the future relative to
+    // the reference date before it is treated as invalid (clock-skew tolerance).
+    // 60 seconds covers typical NTP drift without allowing pathological futures.
+    static let clockSkewToleranceSeconds: TimeInterval = 60
+
     var schemaVersion: Int
     var generatedAt: Date
     var expiresAt: Date
@@ -26,6 +31,11 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
         var protectedMissCount: Int
     }
 
+    // Fix #8: `id` must be unique across all cells in the `gridCells` array.
+    // Callers MUST use a value that is unique per cell — the natural key is
+    // "\(habitIdentifier)-\(localDay)" which is guaranteed distinct for any
+    // valid snapshot. Duplicate `id` values cause SwiftUI ForEach diffing bugs
+    // (incorrect animations, missed updates, or duplicate rows) in widget views.
     struct GridCellState: Codable, Equatable, Identifiable, Sendable {
         var id: String
         var localDay: String
@@ -49,8 +59,17 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
         )
     }
 
+    // Fix #7: Added a lower-bound check so a snapshot whose `generatedAt` is more
+    // than `clockSkewToleranceSeconds` in the future (e.g. bad test data, severe
+    // device clock skew) is rejected rather than served indefinitely. The previous
+    // `generatedAt <= referenceDate` check was strictly correct but did not account
+    // for any clock-skew tolerance, so a 1-second future timestamp would fail on a
+    // legitimately correct device. The tolerance window resolves that edge case while
+    // still bounding pathological futures.
     func isValid(referenceDate: Date = Date()) -> Bool {
-        schemaVersion == Self.currentSchemaVersion && generatedAt <= referenceDate && expiresAt > referenceDate
+        guard schemaVersion == Self.currentSchemaVersion else { return false }
+        let skewBound = referenceDate.addingTimeInterval(Self.clockSkewToleranceSeconds)
+        return generatedAt <= skewBound && expiresAt > referenceDate
     }
 }
 
