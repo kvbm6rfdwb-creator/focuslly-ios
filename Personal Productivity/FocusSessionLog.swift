@@ -31,21 +31,27 @@ struct FocusSessionLog: Identifiable, Codable {
     }
 
     // MARK: - Duration
+
+    /// Raw TimeInterval between startDate and endDate.
     var duration: TimeInterval {
         endDate.timeIntervalSince(startDate)
     }
 
-    var durationText: String {
-        let totalMinutes = Int(duration) / 60
+    /// Whole minutes of the session duration.
+    var durationMinutes: Int { Int(duration) / 60 }
 
+    /// Whole seconds of the session duration.
+    var durationSeconds: Int { Int(duration) }
+
+    /// Human-readable duration string (e.g. "25 min", "1h 5m").
+    var durationText: String {
+        let totalMinutes = durationMinutes
         if totalMinutes < 60 {
             return "\(totalMinutes) min"
         } else {
             let hours = totalMinutes / 60
             let minutes = totalMinutes % 60
-            return minutes == 0
-                ? "\(hours)h"
-                : "\(hours)h \(minutes)m"
+            return minutes == 0 ? "\(hours)h" : "\(hours)h \(minutes)m"
         }
     }
 }
