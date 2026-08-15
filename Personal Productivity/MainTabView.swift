@@ -6,7 +6,12 @@ extension Notification.Name {
 
 // MARK: - MainTabView
 struct MainTabView: View {
-    @StateObject private var settings  = AppSettingsStore()
+    // Fix #3: @StateObject property wrappers with default initialisers removed.
+    // settings and taskStore are both constructed once in init() and handed to
+    // StateObject — the compiler-generated default initialisers would have
+    // allocated and immediately abandoned a second copy of each on every
+    // scene reset.
+    @StateObject private var settings: AppSettingsStore
     @StateObject private var taskStore: TaskStore
     @StateObject private var visionStore = VisionBoardStore()
     @EnvironmentObject var coordinator: FocusSessionCoordinator
@@ -30,7 +35,12 @@ struct MainTabView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            DashboardView(taskStore: taskStore, focusTabSelector: $selectedTab)
+            // Fix #5: DashboardView now reads taskStore from the environment
+            // (injected below via .environmentObject(taskStore) on the TabView).
+            // Previously it received taskStore as an init parameter while every
+            // other tab used the environment, creating an inconsistent dual-reference
+            // path that could cause sub-views to hold a stale copy.
+            DashboardView(focusTabSelector: $selectedTab)
                 .tabItem { Label("Dashboard", systemImage: "house.fill") }
                 .tag(Tab.dashboard)
                 .environmentObject(coordinator)
@@ -45,11 +55,6 @@ struct MainTabView: View {
                 .tabItem { Label("Calendar", systemImage: "calendar") }
                 .tag(Tab.calendar)
                 .environmentObject(taskStore)
-                .onChange(of: selectedTab) { _, newTab in
-                    if newTab != .calendar {
-                        NotificationCenter.default.post(name: .calendarResetToNow, object: nil)
-                    }
-                }
 
             PipelineTabView()
                 .tabItem { Label("Tracker", systemImage: "chart.line.uptrend.xyaxis") }
@@ -62,6 +67,15 @@ struct MainTabView: View {
                 .tag(Tab.visionBoard)
         }
         .tint(.brg)
+        // Fix #4: calendarResetToNow now fires only when the user is *leaving*
+        // the calendar tab (oldTab == .calendar). The previous guard
+        // (newTab != .calendar) fired on every non-calendar → non-calendar
+        // transition, e.g. Dashboard → Focus, sending spurious resets.
+        .onChange(of: selectedTab) { oldTab, newTab in
+            if oldTab == .calendar && newTab != .calendar {
+                NotificationCenter.default.post(name: .calendarResetToNow, object: nil)
+            }
+        }
         .sheet(isPresented: $showAddTask) {
             AddTaskView(onSave: { newTask in taskStore.addTask(newTask) })
                 .environmentObject(taskStore)
@@ -89,6 +103,12 @@ struct MainTabView: View {
     }
 
     // MARK: - Widget insights
+    // Fix #6: @MainActor annotation added. WidgetCenter.shared.reloadTimelines
+    // (called inside FocusWidgetInsights.write) must run on the main thread.
+    // All current call sites are already on the main actor (.onAppear,
+    // .onChange(of: scenePhase)) but the annotation enforces this contract
+    // for any future caller.
+    @MainActor
     private func writeWidgetInsights() {
         let pipeline   = PipelineStore.shared
         let calendar   = Calendar.current
@@ -101,7 +121,6 @@ struct MainTabView: View {
             && ($0.exitReason == .completed || $0.exitReason == .prolonged)
         }
         let sessionsToday = completedLogsToday.count
-        // Use the canonical helper from FocusSessionLog instead of re-deriving inline.
         let focusMinutes = completedLogsToday.reduce(0) { $0 + $1.durationMinutes }
 
         let hotLeads = pipeline.contactMetadata.filter {
