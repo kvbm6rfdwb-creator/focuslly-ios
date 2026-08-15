@@ -281,7 +281,7 @@ struct FocusView: View {
                 .frame(height: 0.5)
                 .padding(.horizontal, 20)
 
-            // ── Suggestion scrolls below ──────────────────────────
+            // ── Suggestion scrolls below ──────────────────────
             ScrollView(.vertical, showsIndicators: false) {
                 if let decision = breakSuggestionDecision {
                     BreakSuggestionCard(decision: decision, accentColor: engine.accentColor)
@@ -430,6 +430,8 @@ struct FocusView: View {
                 .environmentObject(taskStore)
 
             } else if lastExitReason == .paused && engine.blockType == .breakTime {
+                // Early break stop: user chose to stop break before it finished.
+                // Log break insight choice if a decision was active.
                 FocusSessionSummary(
                     task: engine.task, exitReason: .paused,
                     duration: TimeInterval(engine.totalSeconds - engine.remainingSeconds),
@@ -437,13 +439,24 @@ struct FocusView: View {
                     aiInsightOverride: breakInsightDecision?.message, aiInsightDecision: breakInsightDecision,
                     primaryActionTitle: "Continue Break",
                     onPrimaryAction: {
+                        if let decision = breakInsightDecision {
+                            let followed = decision.recommendation == .continueBreak
+                            logBreakInsightChoice(decision: decision, followedRecommendation: followed)
+                        }
                         logBreakAction("continue_break")
                         showSummary = false; breakInsightDecision = nil; breakInsightUserChoseRecommendation = nil
                         hasShownBreakSuggestion = false; lastExitReason = nil
                         DispatchQueue.main.async { engine.resume() }
                     },
                     secondaryActionTitle: "Next Task",
-                    onSecondaryAction: { logBreakAction("next_task_from_early_break"); breakNextOrFinishFromEarlyBreak() },
+                    onSecondaryAction: {
+                        if let decision = breakInsightDecision {
+                            let followed = decision.recommendation == .nextTask
+                            logBreakInsightChoice(decision: decision, followedRecommendation: followed)
+                        }
+                        logBreakAction("next_task_from_early_break")
+                        breakNextOrFinishFromEarlyBreak()
+                    },
                     tertiaryActionTitle: "Finish",
                     onTertiaryAction: {
                         logBreakAction("finish_from_early_break")
@@ -457,6 +470,7 @@ struct FocusView: View {
                 .environmentObject(taskStore)
 
             } else if engine.blockType == .breakTime && engine.sessionState == .finished {
+                // Break completed naturally: log insight choice for Finish / Next Task.
                 FocusSessionSummary(
                     task: engine.task, exitReason: .completed,
                     duration: TimeInterval(engine.totalSeconds - engine.remainingSeconds),
@@ -464,6 +478,10 @@ struct FocusView: View {
                     aiInsightOverride: breakInsightDecision?.message, aiInsightDecision: breakInsightDecision,
                     primaryActionTitle: "Finish",
                     onPrimaryAction: {
+                        if let decision = breakInsightDecision {
+                            let followed = decision.recommendation == .finish
+                            logBreakInsightChoice(decision: decision, followedRecommendation: followed)
+                        }
                         logBreakAction("finish")
                         showSummary = false; breakInsightDecision = nil; breakInsightUserChoseRecommendation = nil
                         hasShownBreakSuggestion = false; lastExitReason = nil
@@ -472,7 +490,12 @@ struct FocusView: View {
                     },
                     secondaryActionTitle: nextPendingTask != nil ? "Next Task" : nil,
                     onSecondaryAction: nextPendingTask != nil ? {
-                        logBreakAction("next_task_from_finished_break"); breakNextOrFinishFromFinishedBreak()
+                        if let decision = breakInsightDecision {
+                            let followed = decision.recommendation == .nextTask
+                            logBreakInsightChoice(decision: decision, followedRecommendation: followed)
+                        }
+                        logBreakAction("next_task_from_finished_break")
+                        breakNextOrFinishFromFinishedBreak()
                     } : nil,
                     recommendedPrimary: false, recommendedSecondary: false
                 )
@@ -730,4 +753,3 @@ private struct ExtendFocusSheet: View {
         .presentationBackground(Color(uiColor: .systemGroupedBackground))
     }
 }
-
