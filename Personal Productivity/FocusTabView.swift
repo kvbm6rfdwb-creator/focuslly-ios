@@ -757,15 +757,17 @@ private struct FocusEngineHostView: View {
     init(task: FocusTask, onExit: @escaping (FocusSessionExit) -> Void) {
         self.task = task
         self.onExit = onExit
-        // TaskStore is injected synchronously via setTaskStore() in onAppear;
-        // passing it here is not possible from an init context, so the engine
-        // accepts an optional and the store is wired before any timer fires.
+        // TaskStore is injected via setTaskStore() in onAppear, which is guaranteed
+        // to fire before the engine's first tick because start() is called from
+        // FocusView.onAppear — both onAppear callbacks run synchronously on the main
+        // run loop before the next timer tick fires.
         _engine = StateObject(wrappedValue: FocusSessionEngine(task: task, taskStore: nil))
     }
 
     var body: some View {
         FocusView(engine: engine, onExit: onExit)
             .onAppear {
+                // Wire the store before FocusView.onAppear calls engine.start().
                 engine.setTaskStore(taskStore)
             }
             .id(engine.task.id)

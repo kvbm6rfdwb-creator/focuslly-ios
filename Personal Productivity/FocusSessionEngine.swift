@@ -164,6 +164,7 @@ final class FocusSessionEngine: ObservableObject {
             let elapsed = max(1, totalSeconds - remainingSeconds)
             recordFocusDurationOnEnd(actualSeconds: elapsed)
         }
+        // Reset continuous-focus counter now that we are entering break mode.
         continuousFocusSeconds = 0
         let breakDuration = calculateBreakDurationSeconds()
         totalSeconds     = breakDuration
@@ -201,6 +202,7 @@ final class FocusSessionEngine: ObservableObject {
     func startBreakAfterSummary() {
         guard blockType == .focus else { return }
         blockType = .breakTime
+        // Reset continuous-focus counter now that we are entering break mode.
         continuousFocusSeconds = 0
         let breakSeconds = calculateBreakDurationSeconds()
         totalSeconds     = breakSeconds
