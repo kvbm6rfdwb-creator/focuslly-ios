@@ -18,7 +18,6 @@ struct FocusTabView: View {
                     .navigationBarTitleDisplayMode(.inline)
             }
         }
-        // Preparation sheet for chained tasks (task-to-task handoff)
         .sheet(item: $taskStore.pendingChainTask) { next in
             SessionPreparationSheet(task: next) { intention in
                 if let intention, !intention.isEmpty {
@@ -29,8 +28,6 @@ struct FocusTabView: View {
             }
             .interactiveDismissDisabled(true)
         }
-        // If the incoming chain task already has an intention saved, skip the
-        // preparation sheet and start immediately.
         .onChange(of: taskStore.pendingChainTask) { _, next in
             guard let next else { return }
             if SessionIntentionStore.shared.get(for: next.id) != nil {
@@ -50,44 +47,12 @@ private struct FocusIdleView: View {
 
     @State private var appeared = false
     @State private var preparingTask: FocusTask? = nil
-    @State private var quickStartPreset: QuickStartPreset? = nil
+    @State private var quickStartPreset: AppSettingsStore.QuickStartTaskPreset? = nil
     @State private var showMealLog = false
-    @State private var mealTick = 0   // incremented on meal changes to refresh toolbar
+    @State private var mealTick = 0
     private var mealStore: MealStore { MealStore.shared }
 
-    struct QuickStartPreset: Identifiable {
-        let id: UUID
-        let title: String; let icon: String; let color: Color
-        let defaultMinutes: Int; let description: String
-        let pipelineCategory: PipelineTaskCategory?
-
-        init(id: UUID = UUID(), title: String, icon: String, color: Color, defaultMinutes: Int, description: String, pipelineCategory: PipelineTaskCategory?) {
-            self.id = id
-            self.title = title
-            self.icon = icon
-            self.color = color
-            self.defaultMinutes = defaultMinutes
-            self.description = description
-            self.pipelineCategory = pipelineCategory
-        }
-    }
-
-    private var quickPresets: [QuickStartPreset] {
-        settings.quickStartTaskPresets.map { preset in
-            QuickStartPreset(
-                id: preset.id,
-                title: preset.title,
-                icon: preset.icon,
-                color: preset.color,
-                defaultMinutes: preset.defaultMinutes,
-                description: preset.description,
-                pipelineCategory: PipelineTaskCategory(rawValue: preset.pipelineCategoryRaw ?? "")
-            )
-        }
-    }
-
     // MARK: - Recommended task
-    // Picks the best task: closest scheduled time to now (overdue first), tie-break by shortest duration.
     private var recommendedTask: FocusTask? {
         let now = Date()
         return taskStore.getTodaysTasks().min { lhs, rhs in
@@ -95,12 +60,11 @@ private struct FocusIdleView: View {
             let rTime = rhs.scheduledTime ?? rhs.startDate
             let lDiff = abs(lTime.timeIntervalSince(now))
             let rDiff = abs(rTime.timeIntervalSince(now))
-            if abs(lDiff - rDiff) < 60 { // within same minute, prefer shorter
+            if abs(lDiff - rDiff) < 60 {
                 let lDur = lhs.focusPlan.blocks.first(where: { $0.type == .focus })?.duration ?? Int.max
                 let rDur = rhs.focusPlan.blocks.first(where: { $0.type == .focus })?.duration ?? Int.max
                 return lDur < rDur
             }
-            // Overdue tasks (past) beat future tasks
             let lOverdue = lTime <= now
             let rOverdue = rTime <= now
             if lOverdue != rOverdue { return lOverdue }
@@ -114,20 +78,20 @@ private struct FocusIdleView: View {
 
     // MARK: - Daily progress
 
-    /// Distinct task IDs that have a completed session log today.
-    /// Single source of truth — always in sync with "Today's Sessions" card.
+    /// Distinct task IDs that have a completed or prolonged session log today.
     private var completedTodayTaskIds: Set<UUID> {
         Set(
             taskStore.sessionLogs
-                .filter { $0.exitReason == .completed && Calendar.current.isDateInToday($0.startDate) }
+                .filter {
+                    ($0.exitReason == .completed || $0.exitReason == .prolonged)
+                    && Calendar.current.isDateInToday($0.startDate)
+                }
                 .map { $0.taskId }
         )
     }
 
     private var todayDone: Int { completedTodayTaskIds.count }
 
-    /// Pending tasks scheduled for today (or overdue), excluding those already
-    /// counted as done via session logs.
     private var pendingTodayTasks: [FocusTask] {
         let calendar = Calendar.current
         let todayStart = calendar.startOfDay(for: Date())
@@ -136,38 +100,31 @@ private struct FocusIdleView: View {
         return taskStore.tasks.filter { task in
             guard task.status == .pending, !doneIds.contains(task.id) else { return false }
             let taskDate = task.scheduledTime ?? task.startDate
-            return taskDate < tomorrowStart // today or overdue
+            return taskDate < tomorrowStart
         }
     }
 
-    /// Total = sessions completed today + tasks still pending for today.
-    /// Grows monotonically as sessions are logged; never shrinks below todayDone.
     private var todayTotal: Int { todayDone + pendingTodayTasks.count }
 
     private var focusMinutesToday: Int {
         taskStore.sessionLogs
-            .filter { $0.exitReason == .completed && Calendar.current.isDateInToday($0.startDate) }
-            .reduce(0) { $0 + Int($1.endDate.timeIntervalSince($1.startDate) / 60) }
+            .filter {
+                ($0.exitReason == .completed || $0.exitReason == .prolonged)
+                && Calendar.current.isDateInToday($0.startDate)
+            }
+            .reduce(0) { $0 + $1.durationMinutes }
     }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 20) {
-
-                // ── Recommended task ───────────────────────────────────────
                 if let task = recommendedTask {
                     recommendedTaskCard(task: task)
                 } else {
                     allClearCard
                 }
-
-                // ── Daily progress ─────────────────────────────────────────
                 dailyProgressCard
-
-                // ── Quick Start ────────────────────────────────────────────
                 quickStartCard
-
-                // ── Session history ───────────────────────────────────────
                 sessionHistoryCard
             }
             .padding(.horizontal, 16)
@@ -188,8 +145,12 @@ private struct FocusIdleView: View {
         }
         .sheet(item: $quickStartPreset) { preset in
             QuickStartSheet(preset: preset) { minutes, intention in
-                startQuickSession(title: preset.title, minutes: minutes, intention: intention,
-                                  pipelineCategory: preset.pipelineCategory)
+                startQuickSession(
+                    title: preset.title,
+                    minutes: minutes,
+                    intention: intention,
+                    pipelineCategory: PipelineTaskCategory(rawValue: preset.pipelineCategoryRaw ?? "")
+                )
             }
         }
         .toolbar {
@@ -228,10 +189,8 @@ private struct FocusIdleView: View {
                 return "at \(formatter.string(from: scheduledTime))"
             }
         }()
-        let accentGreen = Color.brg
 
         return VStack(alignment: .leading, spacing: 14) {
-            // Header row
             HStack {
                 HStack(spacing: 5) {
                     Image(systemName: "sparkles")
@@ -256,13 +215,11 @@ private struct FocusIdleView: View {
                 .clipShape(Capsule())
             }
 
-            // Task title
             Text(task.title)
                 .font(.title3.weight(.bold))
                 .foregroundStyle(.primary)
                 .lineLimit(2)
 
-            // Action row
             HStack(spacing: 10) {
                 Button {
                     HapticManager.impact()
@@ -271,12 +228,12 @@ private struct FocusIdleView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "play.fill")
                             .font(.system(size: 13, weight: .semibold))
-                        Text("Start · \(mins)m")
+                        Text("Start \u{00B7} \(mins)m")
                             .font(.system(size: 15, weight: .semibold))
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
-                    .background(accentGreen)
+                    .background(Color.brg)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .foregroundStyle(.white)
                 }
@@ -284,7 +241,7 @@ private struct FocusIdleView: View {
                 if taskStore.getTodaysTasks().count > 1 {
                     Button {
                         HapticManager.impact()
-                        skipTask(task)
+                        taskStore.skipTask(task)
                     } label: {
                         Image(systemName: "forward.fill")
                             .font(.system(size: 13, weight: .semibold))
@@ -304,19 +261,8 @@ private struct FocusIdleView: View {
         .offset(y: appeared ? 0 : 12)
     }
 
-    // Push task to back of today's list by nudging its scheduledTime to end of day
-    private func skipTask(_ task: FocusTask) {
-        var updated = task
-        let endOfDay = Calendar.current.date(bySettingHour: 23, minute: 59, second: 0, of: Date()) ?? Date()
-        updated.scheduledTime = endOfDay
-        taskStore.updateTask(updated)
-    }
-
-    /// Starts a task. If an intention is already saved, skips the preparation
-    /// sheet and launches immediately; otherwise shows the sheet.
     private func startTask(_ task: FocusTask) {
         if SessionIntentionStore.shared.get(for: task.id) != nil {
-            // Intention already set — start directly without the sheet
             taskStore.startFocus(task: task)
             coordinator.startFocus(task: task)
         } else {
@@ -327,7 +273,7 @@ private struct FocusIdleView: View {
     // MARK: - All clear card
     private var allClearCard: some View {
         HStack(spacing: 14) {
-            Text("🎉").font(.system(size: 32))
+            Text("\u{1F389}").font(.system(size: 32))
             VStack(alignment: .leading, spacing: 3) {
                 Text("All caught up!")
                     .font(.headline)
@@ -346,10 +292,10 @@ private struct FocusIdleView: View {
 
     // MARK: - Daily progress card
     private var dailyProgressCard: some View {
-        let total = todayTotal
-        let done  = todayDone
+        let total    = todayTotal
+        let done     = todayDone
         let progress = total > 0 ? Double(done) / Double(total) : 0.0
-        let mins = focusMinutesToday
+        let mins     = focusMinutesToday
 
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -409,13 +355,12 @@ private struct FocusIdleView: View {
             }
 
             VStack(spacing: 10) {
-                ForEach(quickPresets) { preset in
+                ForEach(settings.quickStartTaskPresets) { preset in
                     Button {
                         HapticManager.impact()
                         quickStartPreset = preset
                     } label: {
                         HStack(spacing: 12) {
-                            // Enhanced brg icon: overlay brgBright and white for extra pop
                             ZStack {
                                 RoundedRectangle(cornerRadius: 9)
                                     .fill(Color.brg)
@@ -461,7 +406,10 @@ private struct FocusIdleView: View {
     // MARK: - Session history card
     private var sessionHistoryCard: some View {
         let todaySessions = taskStore.sessionLogs
-            .filter { $0.exitReason == .completed && Calendar.current.isDateInToday($0.startDate) }
+            .filter {
+                ($0.exitReason == .completed || $0.exitReason == .prolonged)
+                && Calendar.current.isDateInToday($0.startDate)
+            }
             .sorted { $0.startDate > $1.startDate }
         let ratings = (UserDefaults.standard.dictionary(forKey: SessionRatingSheet.ratingsKey) as? [String: String]) ?? [:]
 
@@ -469,7 +417,6 @@ private struct FocusIdleView: View {
             if !todaySessions.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
 
-                    // ── Header ─────────────────────────────────────────
                     HStack(spacing: 8) {
                         Image(systemName: "clock.arrow.circlepath")
                             .font(.system(size: 13, weight: .semibold))
@@ -489,9 +436,8 @@ private struct FocusIdleView: View {
                     .padding(.top, 16)
                     .padding(.bottom, 12)
 
-                    // ── Session rows ───────────────────────────────────
                     ForEach(Array(todaySessions.enumerated()), id: \.element.id) { index, log in
-                        let mins = Int(log.endDate.timeIntervalSince(log.startDate) / 60)
+                        let mins = log.durationMinutes
                         let title = taskTitle(for: log)
                         let ratingKey = SessionRatingSheet.ratingKey(taskId: log.taskId, startDate: log.startDate)
                         let rating = ratings[ratingKey]
@@ -519,12 +465,11 @@ private struct FocusIdleView: View {
                         }
 
                         HStack(spacing: 12) {
-                            // Time column
                             VStack(alignment: .trailing, spacing: 2) {
                                 Text(log.startDate.formatted(.dateTime.hour().minute()))
                                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                                     .foregroundStyle(.secondary)
-                                Text("–")
+                                Text("\u{2013}")
                                     .font(.system(size: 10))
                                     .foregroundStyle(Color(uiColor: .quaternaryLabel))
                                 Text(log.endDate.formatted(.dateTime.hour().minute()))
@@ -533,13 +478,11 @@ private struct FocusIdleView: View {
                             }
                             .frame(width: 36)
 
-                            // Vertical line
                             RoundedRectangle(cornerRadius: 1.5)
                                 .fill(ratingColor.opacity(rating != nil ? 0.5 : 0.15))
                                 .frame(width: 3)
                                 .frame(maxHeight: .infinity)
 
-                            // Task title + duration
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(title)
                                     .font(.system(size: 14, weight: .semibold))
@@ -552,7 +495,6 @@ private struct FocusIdleView: View {
 
                             Spacer()
 
-                            // Rating badge
                             if let rating {
                                 HStack(spacing: 4) {
                                     Image(systemName: ratingIcon)
@@ -586,7 +528,6 @@ private struct FocusIdleView: View {
     }
 
     // MARK: - Actions
-
     private func startQuickSession(title: String, minutes: Int, intention: String?,
                                    pipelineCategory: PipelineTaskCategory? = nil) {
         let duration = minutes * 60
@@ -610,7 +551,7 @@ private struct FocusIdleView: View {
 
 // MARK: - Quick Start Sheet
 private struct QuickStartSheet: View {
-    let preset: FocusIdleView.QuickStartPreset
+    let preset: AppSettingsStore.QuickStartTaskPreset
     let onStart: (Int, String?) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -620,7 +561,7 @@ private struct QuickStartSheet: View {
     @State private var selectedPreset: String? = nil
     @FocusState private var intentionFocused: Bool
 
-    init(preset: FocusIdleView.QuickStartPreset, onStart: @escaping (Int, String?) -> Void) {
+    init(preset: AppSettingsStore.QuickStartTaskPreset, onStart: @escaping (Int, String?) -> Void) {
         self.preset = preset
         self.onStart = onStart
         _minutes = State(initialValue: preset.defaultMinutes)
@@ -628,17 +569,13 @@ private struct QuickStartSheet: View {
 
     private let steps = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 75, 90, 120]
 
-    /// Intention presets — same across all session types for consistency
-    private var intentionPresets: [String] {
-        settings.intentionPresets
-    }
+    private var intentionPresets: [String] { settings.intentionPresets }
 
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 24) {
 
-                    // ── Session type header ──────────────────────────
                     HStack(spacing: 14) {
                         ZStack {
                             RoundedRectangle(cornerRadius: 14)
@@ -661,7 +598,6 @@ private struct QuickStartSheet: View {
                     .background(Color(.secondarySystemBackground))
                     .clipShape(RoundedRectangle(cornerRadius: 18))
 
-                    // ── Duration picker ──────────────────────────────
                     VStack(alignment: .leading, spacing: 12) {
                         Text("DURATION")
                             .font(.system(size: 11, weight: .semibold))
@@ -708,7 +644,6 @@ private struct QuickStartSheet: View {
                         }
                         .padding(.vertical, 8)
 
-                        // Quick-pick chips
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
                                 let chips = settings.setTimePresets.isEmpty ? [15, 25, 30, 45, 60, 90] : settings.setTimePresets.map(\.minutes)
@@ -735,14 +670,12 @@ private struct QuickStartSheet: View {
                     .background(Color(.secondarySystemBackground))
                     .clipShape(RoundedRectangle(cornerRadius: 18))
 
-                    // ── Intention field ──────────────────────────────
                     VStack(alignment: .leading, spacing: 12) {
                         Text("INTENTION (OPTIONAL)")
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(.secondary)
                             .kerning(0.4)
 
-                        // Preset chips
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
                                 ForEach(intentionPresets, id: \.self) { p in
@@ -779,7 +712,6 @@ private struct QuickStartSheet: View {
                             }
                     }
 
-                    // ── Start button ─────────────────────────────────
                     Button {
                         HapticManager.impact(.medium)
                         onStart(minutes, intention.isEmpty ? nil : intention)
@@ -788,7 +720,7 @@ private struct QuickStartSheet: View {
                         HStack(spacing: 8) {
                             Image(systemName: "play.fill")
                                 .font(.system(size: 14, weight: .semibold))
-                            Text("Start \(preset.title) · \(minutes)m")
+                            Text("Start \(preset.title) \u{00B7} \(minutes)m")
                                 .font(.system(size: 16, weight: .semibold))
                         }
                         .frame(maxWidth: .infinity)
@@ -820,19 +752,20 @@ private struct FocusEngineHostView: View {
     let onExit: (FocusSessionExit) -> Void
 
     @EnvironmentObject private var taskStore: TaskStore
-
     @StateObject private var engine: FocusSessionEngine
 
     init(task: FocusTask, onExit: @escaping (FocusSessionExit) -> Void) {
         self.task = task
         self.onExit = onExit
+        // TaskStore is injected synchronously via setTaskStore() in onAppear;
+        // passing it here is not possible from an init context, so the engine
+        // accepts an optional and the store is wired before any timer fires.
         _engine = StateObject(wrappedValue: FocusSessionEngine(task: task, taskStore: nil))
     }
 
     var body: some View {
         FocusView(engine: engine, onExit: onExit)
             .onAppear {
-                TaskStoreLocator.shared.store = taskStore
                 engine.setTaskStore(taskStore)
             }
             .id(engine.task.id)
