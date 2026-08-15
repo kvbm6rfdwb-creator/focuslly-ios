@@ -25,7 +25,6 @@ struct FocusWidgetData: Codable {
     static let appGroupID      = "group.com.karlo.personalproductivity.focus"
 
     // Fix D: @MainActor required — WidgetCenter.shared is not Sendable.
-    // FocusSessionEngine call sites must dispatch to the main actor; see writeWidgetData().
     @MainActor
     static func write(_ data: FocusWidgetData) {
         guard let defaults = UserDefaults(suiteName: appGroupID) else { return }
@@ -43,8 +42,7 @@ struct FocusWidgetData: Codable {
         WidgetCenter.shared.reloadTimelines(ofKind: "FocusWidget")
     }
 
-    // Fix G: Evict the stale key immediately on read instead of silently discarding
-    // so subsequent timeline reloads do not repeatedly decode the same dead payload.
+    // Fix G: Evict the stale key immediately on read.
     static func read() -> FocusWidgetData? {
         guard let defaults = UserDefaults(suiteName: appGroupID),
               let data = defaults.data(forKey: userDefaultsKey),
@@ -59,42 +57,37 @@ struct FocusWidgetData: Codable {
 }
 
 // MARK: - Idle-state insights (written by main app, shown when no session is active)
-struct FocusWidgetInsights: Codable {
-    var dialsToday: Int        = 0
-    var dialTarget: Int        = 55
-    var sessionsToday: Int     = 0
-    var focusMinutesToday: Int = 0
-    var hotLeadsCount: Int     = 0
-    var pendingActions: Int    = 0
-    var currentStreak: Int     = 0
-    /// UTC timestamp written at the moment this snapshot is persisted.
-    /// The widget extension rejects snapshots older than stalenessWindow.
-    var writtenAt: Date        = Date()
+//
+// Persistence I/O for this type lives in WidgetInsightsPersistence /
+// LiveWidgetInsightsPersistence. Do NOT add static write/read helpers here;
+// that pattern was removed so the coordinator can own the full write+reload
+// sequence and tests can inject a spy.
+struct FocusWidgetInsights: Codable, Equatable {
 
-    /// Maximum age before insights are considered stale and discarded by the extension.
+    // MARK: Task state
+    /// Number of tasks not yet marked complete.
+    var pendingTaskCount: Int   = 0
+    /// Tasks completed since midnight today.
+    var completedToday: Int     = 0
+    /// Title of the highest-priority pending task (nil when task list is empty).
+    var currentTaskTitle: String?
+    /// Title of the second-highest-priority pending task.
+    var nextTaskTitle: String?
+
+    // MARK: Session state
+    /// Total focus minutes accumulated today across all logged sessions.
+    var focusMinutesToday: Int  = 0
+    /// Consecutive calendar days (ending today) with at least one focus session.
+    var weeklyStreakDays: Int    = 0
+
+    // MARK: Metadata
+    /// UTC timestamp written by the coordinator at persistence time.
+    /// The widget extension rejects snapshots older than `stalenessWindow`.
+    var lastUpdated: Date       = Date()
+
+    /// Maximum age before the extension considers this snapshot stale.
     static let stalenessWindow: TimeInterval = 4 * 60 * 60 // 4 hours
 
+    /// UserDefaults key used by both LiveWidgetInsightsPersistence and the extension.
     static let userDefaultsKey = "focusWidgetInsights"
-
-    // Fix C + A: @MainActor annotation added; this write path was previously
-    // unannotated and never called. TaskStore.logSession() and DashboardViewModel
-    // should call this after any data change that affects the idle widget panel.
-    @MainActor
-    static func write(_ insights: FocusWidgetInsights) {
-        guard let defaults = UserDefaults(suiteName: FocusWidgetData.appGroupID) else { return }
-        if let encoded = try? JSONEncoder().encode(insights) {
-            defaults.set(encoded, forKey: userDefaultsKey)
-        }
-        // Fix E (insights path): reloadTimelines is owned here; callers must NOT
-        // call reloadTimelines themselves after invoking this method.
-        WidgetCenter.shared.reloadTimelines(ofKind: "FocusWidget")
-    }
-
-    static func read() -> FocusWidgetInsights? {
-        guard let defaults = UserDefaults(suiteName: FocusWidgetData.appGroupID),
-              let data = defaults.data(forKey: userDefaultsKey),
-              let decoded = try? JSONDecoder().decode(FocusWidgetInsights.self, from: data)
-        else { return nil }
-        return decoded
-    }
 }
