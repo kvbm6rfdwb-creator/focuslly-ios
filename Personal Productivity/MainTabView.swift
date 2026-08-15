@@ -6,14 +6,17 @@ extension Notification.Name {
 
 // MARK: - MainTabView
 struct MainTabView: View {
-    @StateObject private var settings = AppSettingsStore()
+    @StateObject private var settings  = AppSettingsStore()
     @StateObject private var taskStore: TaskStore
     @StateObject private var visionStore = VisionBoardStore()
     @EnvironmentObject var coordinator: FocusSessionCoordinator
     @Environment(\.scenePhase) private var scenePhase
 
-    @State private var showAddTask = false
+    @State private var showAddTask  = false
     @State private var selectedTab: Tab = .dashboard
+
+    /// Retained observer tokens — released when the view is torn down.
+    @State private var notificationTokens: [NSObjectProtocol] = []
 
     enum Tab {
         case dashboard, focus, calendar, pipeline, visionBoard
@@ -21,7 +24,7 @@ struct MainTabView: View {
 
     init() {
         let settings = AppSettingsStore()
-        _settings = StateObject(wrappedValue: settings)
+        _settings  = StateObject(wrappedValue: settings)
         _taskStore = StateObject(wrappedValue: TaskStore(settings: settings))
     }
 
@@ -64,10 +67,18 @@ struct MainTabView: View {
                 .environmentObject(taskStore)
         }
         .onAppear {
-            NotificationCenter.default.addObserver(forName: NSNotification.Name("ShowAddTask"), object: nil, queue: .main) { _ in showAddTask = true }
-            NotificationCenter.default.addObserver(forName: NSNotification.Name("StartFocusSession"), object: nil, queue: .main) { _ in selectedTab = .focus }
-            NotificationCenter.default.addObserver(forName: NSNotification.Name("OpenVisionBoard"), object: nil, queue: .main) { _ in selectedTab = .visionBoard }
+            guard notificationTokens.isEmpty else { return }   // already subscribed
+            let nc = NotificationCenter.default
+            notificationTokens = [
+                nc.addObserver(forName: NSNotification.Name("ShowAddTask"),       object: nil, queue: .main) { _ in showAddTask  = true },
+                nc.addObserver(forName: NSNotification.Name("StartFocusSession"), object: nil, queue: .main) { _ in selectedTab = .focus },
+                nc.addObserver(forName: NSNotification.Name("OpenVisionBoard"),   object: nil, queue: .main) { _ in selectedTab = .visionBoard },
+            ]
             writeWidgetInsights()
+        }
+        .onDisappear {
+            notificationTokens.forEach { NotificationCenter.default.removeObserver($0) }
+            notificationTokens = []
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { writeWidgetInsights() }
@@ -77,9 +88,10 @@ struct MainTabView: View {
         .environmentObject(visionStore)
     }
 
+    // MARK: - Widget insights
     private func writeWidgetInsights() {
-        let pipeline  = PipelineStore.shared
-        let calendar  = Calendar.current
+        let pipeline   = PipelineStore.shared
+        let calendar   = Calendar.current
         let todayStart = calendar.startOfDay(for: Date())
 
         let dialsToday = pipeline.callLogs.filter { $0.date >= todayStart }.count
@@ -89,10 +101,14 @@ struct MainTabView: View {
             && ($0.exitReason == .completed || $0.exitReason == .prolonged)
         }
         let sessionsToday = completedLogsToday.count
-        let focusMinutes  = completedLogsToday
-            .reduce(0) { $0 + Int($1.endDate.timeIntervalSince($1.startDate) / 60) }
-        let hotLeads       = pipeline.contactMetadata.filter { $0.tag == .hotLead || $0.tag == .activeClient }.count
-        let pending: Int   = {
+        // Use the canonical helper from FocusSessionLog instead of re-deriving inline.
+        let focusMinutes = completedLogsToday.reduce(0) { $0 + $1.durationMinutes }
+
+        let hotLeads = pipeline.contactMetadata.filter {
+            $0.tag == .hotLead || $0.tag == .activeClient
+        }.count
+
+        let pending: Int = {
             var grouped: [String: [CallLog]] = [:]
             for log in pipeline.callLogs {
                 let raw = log.contactName.trimmingCharacters(in: .whitespaces)
