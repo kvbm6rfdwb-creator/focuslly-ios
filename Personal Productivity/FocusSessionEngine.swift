@@ -305,16 +305,8 @@ final class FocusSessionEngine: ObservableObject {
     }
 
     // MARK: - Finish (distracted / other non-completion exits)
-    /// Logs the session with .interrupted (not .completed) and tears down the timer.
+    /// Tears down the timer. Logging is handled by confirmExit() before this is called.
     private func finishSession() {
-        if let store = taskStore, blockType == .focus {
-            store.logSession(
-                taskId: task.id,
-                startDate: blockStartDate ?? Date(),
-                endDate: Date(),
-                exitReason: .interrupted   // was .completed — distracted/other are NOT completions
-            )
-        }
         FocusWidgetData.clear()
         invalidateTimer()
         sessionState = .finished
