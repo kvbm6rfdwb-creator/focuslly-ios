@@ -7,10 +7,19 @@ enum FocusllyModelContainerState {
     case unavailable(FocusllyModelContainerError)
 }
 
+// Fix #8: `id = UUID()` made every instance unequal to every other even when
+// message and recoverySuggestion were identical, breaking unit tests of the
+// .unavailable branch and any equality-based switch logic on the state enum.
+// `id` exists solely to satisfy Identifiable for SwiftUI List presentation;
+// Equatable now compares on the two meaningful content fields instead.
 struct FocusllyModelContainerError: Error, Identifiable, Equatable {
     let id = UUID()
     let message: String
     let recoverySuggestion: String
+
+    static func == (lhs: FocusllyModelContainerError, rhs: FocusllyModelContainerError) -> Bool {
+        lhs.message == rhs.message && lhs.recoverySuggestion == rhs.recoverySuggestion
+    }
 
     static func initializationFailed(_ error: Error) -> FocusllyModelContainerError {
         FocusllyModelContainerError(
