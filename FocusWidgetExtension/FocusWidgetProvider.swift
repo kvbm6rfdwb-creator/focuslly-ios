@@ -35,12 +35,21 @@ struct FocusWidgetProvider: TimelineProvider {
 
         if let data {
             if data.isPaused {
-                // Timer is paused — just show the current frozen state.
-                // Don't schedule an expiry entry at endDate because that date is no longer
-                // meaningful while paused. Refresh after 30 s so we pick up a resume quickly.
+                // Fix #6: Cap the paused-refresh interval so an abandoned session
+                // does not wake the widget extension every 30 s indefinitely.
+                // Poll every 30 s only while the session could still be resumed
+                // (i.e. endDate is in the future). Once endDate has passed, defer
+                // to atEnd so WidgetKit chooses the next sensible reload time.
                 let entry = FocusWidgetEntry(date: now, widgetData: data, insights: insights)
-                let refreshAt = now.addingTimeInterval(30)
-                completion(Timeline(entries: [entry], policy: .after(refreshAt)))
+                if data.endDate > now {
+                    let refreshAt = min(
+                        now.addingTimeInterval(30),
+                        data.endDate.addingTimeInterval(5 * 60)
+                    )
+                    completion(Timeline(entries: [entry], policy: .after(refreshAt)))
+                } else {
+                    completion(Timeline(entries: [entry], policy: .atEnd))
+                }
             } else {
                 // Timer is running — schedule a second entry right after endDate so the
                 // widget snaps to idle as soon as the session finishes.
@@ -52,7 +61,11 @@ struct FocusWidgetProvider: TimelineProvider {
             }
         } else {
             let entry = FocusWidgetEntry(date: now, widgetData: nil, insights: insights)
-            let nextRefresh = Calendar.current.date(byAdding: .minute, value: 5, to: now)!
+            // Fix #5: Calendar.date(byAdding:) returns Date? — force-unwrap would crash
+            // the widget extension process on any calendar edge case or extreme clock value.
+            // Fall back to a 5-minute addingTimeInterval which cannot return nil.
+            let nextRefresh = Calendar.current.date(byAdding: .minute, value: 5, to: now)
+                ?? now.addingTimeInterval(5 * 60)
             completion(Timeline(entries: [entry], policy: .after(nextRefresh)))
         }
     }
