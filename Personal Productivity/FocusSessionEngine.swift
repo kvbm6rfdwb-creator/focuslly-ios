@@ -164,7 +164,6 @@ final class FocusSessionEngine: ObservableObject {
             let elapsed = max(1, totalSeconds - remainingSeconds)
             recordFocusDurationOnEnd(actualSeconds: elapsed)
         }
-        // Reset continuous-focus counter now that we are entering break mode.
         continuousFocusSeconds = 0
         let breakDuration = calculateBreakDurationSeconds()
         totalSeconds     = breakDuration
@@ -194,7 +193,10 @@ final class FocusSessionEngine: ObservableObject {
                 )
             }
         }
-        FocusWidgetData.clear()
+        // Fix F: FocusWidgetData.clear() is now @MainActor. The engine is not
+        // @MainActor-isolated, so dispatch via Task to avoid the actor-isolation
+        // compile error without unsafely stripping the annotation.
+        Task { @MainActor in FocusWidgetData.clear() }
         invalidateTimer()
         sessionState = .finished
     }
@@ -202,7 +204,6 @@ final class FocusSessionEngine: ObservableObject {
     func startBreakAfterSummary() {
         guard blockType == .focus else { return }
         blockType = .breakTime
-        // Reset continuous-focus counter now that we are entering break mode.
         continuousFocusSeconds = 0
         let breakSeconds = calculateBreakDurationSeconds()
         totalSeconds     = breakSeconds
@@ -234,7 +235,7 @@ final class FocusSessionEngine: ObservableObject {
             case .paused:                    log(.paused)
             case .continueNow:               log(.interrupted)
             case .other(let text):           log(.other, custom: text)
-            case .completed, .prolonged:     break   // logged in finishFocusAndAwaitBreak()
+            case .completed, .prolonged:     break
             }
         }
 
@@ -292,7 +293,8 @@ final class FocusSessionEngine: ObservableObject {
                     )
                 }
                 continuousFocusSeconds = 0
-                FocusWidgetData.clear()
+                // Fix F: @MainActor dispatch for clear().
+                Task { @MainActor in FocusWidgetData.clear() }
                 SoundManager.breakComplete()
                 breakCompletedCallback?()
                 invalidateTimer()
@@ -309,9 +311,9 @@ final class FocusSessionEngine: ObservableObject {
     }
 
     // MARK: - Finish (distracted / other non-completion exits)
-    /// Tears down the timer. Logging is handled by confirmExit() before this is called.
     private func finishSession() {
-        FocusWidgetData.clear()
+        // Fix F: @MainActor dispatch for clear().
+        Task { @MainActor in FocusWidgetData.clear() }
         invalidateTimer()
         sessionState = .finished
     }
@@ -408,6 +410,14 @@ final class FocusSessionEngine: ObservableObject {
     var liveActivitySessionIdPublic: UUID { liveActivitySessionId }
 
     // MARK: - Widget data
+    // Fix E: Each helper calls FocusWidgetData.write() exactly once.
+    // FocusWidgetData.write() owns the single reloadTimelines(ofKind:) call —
+    // do NOT add a second call here. Previously writeWidgetData() and
+    // writePausedWidgetData() each called reloadTimelines() a second time after
+    // write(), doubling widget wake-ups on every pause and resume.
+    //
+    // Fix F: FocusWidgetData.write() is @MainActor. The engine is not @MainActor
+    // isolated so we dispatch to the main actor via Task { @MainActor in ... }.
     private func writeWidgetData() {
         guard let blockStart = blockStartDate else { return }
         let endDate = blockStart.addingTimeInterval(TimeInterval(totalSeconds))
@@ -419,8 +429,7 @@ final class FocusSessionEngine: ObservableObject {
         )
         data.isPaused = false
         data.pausedRemainingSeconds = 0
-        FocusWidgetData.write(data)
-        WidgetCenter.shared.reloadTimelines(ofKind: "FocusWidget")
+        Task { @MainActor in FocusWidgetData.write(data) }
     }
 
     private func writePausedWidgetData() {
@@ -434,7 +443,6 @@ final class FocusSessionEngine: ObservableObject {
         )
         data.isPaused = true
         data.pausedRemainingSeconds = remainingSeconds
-        FocusWidgetData.write(data)
-        WidgetCenter.shared.reloadTimelines(ofKind: "FocusWidget")
+        Task { @MainActor in FocusWidgetData.write(data) }
     }
 }
