@@ -3,6 +3,12 @@ import SwiftData
 
 @Model
 final class Habit {
+    // Contract: @Attribute(.unique) on `identifier` means SwiftData will throw
+    // (or silently overwrite, depending on version) if a duplicate UUID is inserted.
+    // Callers MUST call FocusllyValidation.requireValidIdentifier before insert and
+    // MUST fetch-before-insert to guarantee no duplicate exists. Do not rely on
+    // SwiftData's constraint enforcement alone — its error handling for unique
+    // violations is not guaranteed to be catchable across all OS versions.
     @Attribute(.unique) var identifier: UUID
     var title: String
     var detail: String?
@@ -13,8 +19,17 @@ final class Habit {
     var scheduleKindRawValue: String
     var scheduleDetail: String?
     var cueText: String?
+
+    // NOTE(reminder-fields): reminderHour and reminderMinute here are V1 scaffolding
+    // fields retained for schema compatibility. The canonical source of truth for
+    // reminder timing is HabitNotificationPlan.reminderHour / reminderMinute.
+    // These Habit-level fields must not be read for scheduling decisions — always
+    // read from the associated notificationPlan instead.
+    // TODO(reminder-cleanup): Remove these fields in a future VersionedSchema bump
+    // once all callsites have been migrated to read from HabitNotificationPlan.
     var reminderHour: Int?
     var reminderMinute: Int?
+
     var colorHex: String?
     var iconName: String?
 
@@ -58,6 +73,7 @@ final class Habit {
 
 @Model
 final class HabitCheckIn {
+    // Contract: see Habit.identifier for @Attribute(.unique) insert semantics.
     @Attribute(.unique) var identifier: UUID
     var habit: Habit?
     var occurredAt: Date
@@ -93,6 +109,7 @@ final class HabitCheckIn {
 
 @Model
 final class FocusSessionRecord {
+    // Contract: see Habit.identifier for @Attribute(.unique) insert semantics.
     @Attribute(.unique) var identifier: UUID
     var habit: Habit?
     var legacyTaskTitle: String?
@@ -140,6 +157,7 @@ final class FocusSessionRecord {
 
 @Model
 final class PlannedRestDay {
+    // Contract: see Habit.identifier for @Attribute(.unique) insert semantics.
     @Attribute(.unique) var identifier: UUID
     var habit: Habit?
     var normalizedLocalDay: String
@@ -163,6 +181,7 @@ final class PlannedRestDay {
 
 @Model
 final class FreezeTokenLedgerEntry {
+    // Contract: see Habit.identifier for @Attribute(.unique) insert semantics.
     @Attribute(.unique) var identifier: UUID
     var habit: Habit?
     var eventTypeRawValue: String
@@ -192,6 +211,7 @@ final class FreezeTokenLedgerEntry {
 
 @Model
 final class ReflectionEntry {
+    // Contract: see Habit.identifier for @Attribute(.unique) insert semantics.
     @Attribute(.unique) var identifier: UUID
     var periodTypeRawValue: String
     var periodStartLocalDay: String
@@ -215,9 +235,13 @@ final class ReflectionEntry {
 
 @Model
 final class HabitNotificationPlan {
+    // Contract: see Habit.identifier for @Attribute(.unique) insert semantics.
     @Attribute(.unique) var identifier: UUID
     var habit: Habit?
     var enabled: Bool
+    // Canonical reminder time fields. These are the authoritative source for all
+    // notification scheduling decisions. Do NOT read Habit.reminderHour /
+    // Habit.reminderMinute for scheduling — those fields are legacy scaffolding.
     var reminderHour: Int?
     var reminderMinute: Int?
     var cadenceStateRawValue: String
@@ -247,6 +271,8 @@ final class HabitNotificationPlan {
 
 @Model
 final class AppMigrationRecord {
+    // Uses migrationName (not a UUID) as the unique key because migration records
+    // are looked up by name. See SwiftDataMigrationService.existingMigrationRecord.
     @Attribute(.unique) var migrationName: String
     var completedAt: Date
     var sourceVersion: String
