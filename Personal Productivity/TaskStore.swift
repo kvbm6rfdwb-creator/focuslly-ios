@@ -77,13 +77,8 @@ final class TaskStore: ObservableObject {
 
         return tasks
             .filter { task in
-                // Must be pending (not completed)
                 guard task.status == .pending else { return false }
-
-                // Get the scheduled date or start date
                 let taskDate = task.scheduledTime ?? task.startDate
-
-                // Include tasks from today or earlier (overdue/carry-forward)
                 return taskDate < tomorrowStart
             }
             .sorted { task1, task2 in
@@ -100,7 +95,6 @@ final class TaskStore: ObservableObject {
         settings.scheduleTaskStartNotifications(tasks: getTodaysTasks())
     }
 
-    // 🆕 ADD MULTIPLE TASKS (for recurrence)
     func addTasks(_ newTasks: [FocusTask]) {
         tasks.append(contentsOf: newTasks)
         saveTasks()
@@ -131,23 +125,13 @@ final class TaskStore: ObservableObject {
     }
 
     func completeTask(_ task: FocusTask) {
-        // Mark completed for persistence/logging contexts.
         var updated = task
         updated.status = .completed
-        
-        // Update the task in the array
         guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
         tasks[index] = updated
-        
-        // ✅ Keep the completed task in the array so it shows in calendar with checkmark
-        // The calendar will still show it, but with a checkmark indicating completion
-
-        // If this was the active focus task, clear it.
         if activeFocusTask?.id == task.id {
             activeFocusTask = nil
         }
-
-        // Save once after all updates
         saveTasks()
         settings.scheduleTaskStartNotifications(tasks: getTodaysTasks())
     }
@@ -159,8 +143,8 @@ final class TaskStore: ObservableObject {
         settings.scheduleTaskStartNotifications(tasks: getTodaysTasks())
     }
 
-    // MARK: - Recurrence generation (🆕 CORE LOGIC)
-    /// Generates concrete task instances for the next 30 days
+    // MARK: - Recurrence generation
+    /// Generates concrete task instances for the next `daysAhead` days.
     func generateRecurringTasks(from baseTask: FocusTask, daysAhead: Int = 30) -> [FocusTask] {
         guard let startDate = baseTask.scheduledTime else { return [] }
 
@@ -168,31 +152,21 @@ final class TaskStore: ObservableObject {
         var generated: [FocusTask] = []
 
         for offset in 0..<daysAhead {
-            guard let date = calendar.date(byAdding: .day, value: offset, to: startDate) else {
-                continue
-            }
+            guard let date = calendar.date(byAdding: .day, value: offset, to: startDate) else { continue }
 
             let weekday = calendar.component(.weekday, from: date)
             let normalizedWeekday = weekday == 1 ? 7 : weekday - 1 // Mon = 1 ... Sun = 7
 
             let shouldInclude: Bool
             switch baseTask.recurrenceType {
-            case .once:
-                shouldInclude = offset == 0
-
-            case .daily:
-                shouldInclude = true
-
-            case .weekdays:
-                shouldInclude = normalizedWeekday <= 5
-
-            case .custom:
-                shouldInclude = baseTask.recurrenceDays?.contains(normalizedWeekday) == true
+            case .once:     shouldInclude = offset == 0
+            case .daily:    shouldInclude = true
+            case .weekdays: shouldInclude = normalizedWeekday <= 5
+            case .custom:   shouldInclude = baseTask.recurrenceDays?.contains(normalizedWeekday) == true
             }
 
             guard shouldInclude else { continue }
 
-            // ✅ ISPRAVNO: koristimo init, NE diramo id
             let task = FocusTask(
                 title: baseTask.title,
                 focusPlan: baseTask.focusPlan,
@@ -201,7 +175,6 @@ final class TaskStore: ObservableObject {
                 recurrenceType: baseTask.recurrenceType,
                 recurrenceDays: baseTask.recurrenceDays
             )
-
             generated.append(task)
         }
 
@@ -234,28 +207,28 @@ final class TaskStore: ObservableObject {
         if exitReason == .completed || exitReason == .prolonged,
            let task = tasks.first(where: { $0.id == taskId }),
            task.pipelineCategory != nil {
-            let durationMinutes = max(1, Int(endDate.timeIntervalSince(startDate) / 60))
-            PipelineStore.shared.recordTaskCompletion(task: task, durationMinutes: durationMinutes)
+            PipelineStore.shared.recordTaskCompletion(task: task, durationMinutes: max(1, log.durationMinutes))
         }
     }
 
     // MARK: - Daily Streak
+    /// Counts consecutive days (ending today) that have at least one completed or prolonged session.
     var dailyStreak: Int {
         let calendar = Calendar.current
 
-        let completedDays = Set(
+        let activeDays = Set(
             sessionLogs
-                .filter { $0.exitReason == .completed }
+                .filter { $0.exitReason == .completed || $0.exitReason == .prolonged }
                 .map { calendar.startOfDay(for: $0.startDate) }
         )
 
-        guard !completedDays.isEmpty else { return 0 }
+        guard !activeDays.isEmpty else { return 0 }
 
         var streak = 0
         var currentDay = calendar.startOfDay(for: Date())
 
         var safety = 0
-        while completedDays.contains(currentDay) {
+        while activeDays.contains(currentDay) {
             streak += 1
             safety += 1
             if safety > 3660 { break }
@@ -266,51 +239,49 @@ final class TaskStore: ObservableObject {
         return streak
     }
 
-    /// Strict streak: counts only consecutive days where
-    /// - the day has at least one task
-    /// - every task scheduled that day has a completed session log that day
-    /// - there are NO lost-focus sessions (distracted) that day
+    // MARK: - Strict streak helpers (private)
+    private func tasksForDay(_ dayStart: Date) -> [FocusTask] {
+        let calendar = Calendar.current
+        return tasks.filter { task in
+            let d = task.scheduledTime ?? task.startDate
+            return calendar.isDate(d, inSameDayAs: dayStart)
+        }
+    }
+
+    private func dayHasDistracted(_ dayStart: Date) -> Bool {
+        let calendar = Calendar.current
+        return sessionLogs.contains {
+            $0.exitReason == .distracted && calendar.isDate($0.startDate, inSameDayAs: dayStart)
+        }
+    }
+
+    private func completedLogTaskIDsForDay(_ dayStart: Date) -> Set<UUID> {
+        let calendar = Calendar.current
+        return Set(
+            sessionLogs
+                .filter {
+                    ($0.exitReason == .completed || $0.exitReason == .prolonged)
+                    && calendar.isDate($0.startDate, inSameDayAs: dayStart)
+                }
+                .map { $0.taskId }
+        )
+    }
+
+    private func dayQualifies(_ dayStart: Date) -> Bool {
+        guard !dayHasDistracted(dayStart) else { return false }
+        let dayTasks = tasksForDay(dayStart)
+        guard !dayTasks.isEmpty else { return false }
+        let completedLogIDs = completedLogTaskIDsForDay(dayStart)
+        return dayTasks.allSatisfy { task in
+            task.status == .completed && completedLogIDs.contains(task.id)
+        }
+    }
+
+    /// Strict streak: counts only consecutive days where every scheduled task
+    /// is completed and there are no distracted sessions.
     /// Days with no tasks are skipped (do not increment, do not break).
     var strictDailyStreak: Int {
         let calendar = Calendar.current
-
-        func tasksForDay(_ dayStart: Date) -> [FocusTask] {
-            tasks.filter { task in
-                let d = task.scheduledTime ?? task.startDate
-                return calendar.isDate(d, inSameDayAs: dayStart)
-            }
-        }
-
-        func dayHasDistracted(_ dayStart: Date) -> Bool {
-            sessionLogs.contains {
-                $0.exitReason == .distracted && calendar.isDate($0.startDate, inSameDayAs: dayStart)
-            }
-        }
-
-        func completedLogTaskIDsForDay(_ dayStart: Date) -> Set<UUID> {
-            Set(
-                sessionLogs
-                    .filter {
-                        ($0.exitReason == .completed || $0.exitReason == .prolonged)
-                        && calendar.isDate($0.startDate, inSameDayAs: dayStart)
-                    }
-                    .map { $0.taskId }
-            )
-        }
-
-        func dayQualifies(_ dayStart: Date) -> Bool {
-            if dayHasDistracted(dayStart) { return false }
-
-            let dayTasks = tasksForDay(dayStart)
-            guard !dayTasks.isEmpty else { return false }
-
-            let completedLogIDs = completedLogTaskIDsForDay(dayStart)
-
-            return dayTasks.allSatisfy { task in
-                task.status == .completed && completedLogIDs.contains(task.id)
-            }
-        }
-
         var streak = 0
         var currentDay = calendar.startOfDay(for: Date())
 
@@ -322,7 +293,6 @@ final class TaskStore: ObservableObject {
             let dayTasks = tasksForDay(currentDay)
 
             if dayTasks.isEmpty {
-                // Days without tasks do NOT increment and do NOT break streak.
                 guard let prev = calendar.date(byAdding: .day, value: -1, to: currentDay) else { break }
                 currentDay = prev
                 continue
@@ -344,36 +314,26 @@ final class TaskStore: ObservableObject {
     // MARK: - Weekly / Monthly Summary
     var focusMinutesThisWeek: Int {
         let calendar = Calendar.current
-        guard let weekInterval = calendar.dateInterval(of: .weekOfYear, for: Date()) else {
-            return 0
-        }
+        guard let weekInterval = calendar.dateInterval(of: .weekOfYear, for: Date()) else { return 0 }
         return totalMinutes(in: weekInterval)
     }
 
     var focusMinutesThisMonth: Int {
         let calendar = Calendar.current
-        guard let monthInterval = calendar.dateInterval(of: .month, for: Date()) else {
-            return 0
-        }
+        guard let monthInterval = calendar.dateInterval(of: .month, for: Date()) else { return 0 }
         return totalMinutes(in: monthInterval)
     }
 
     var bestFocusDay: (date: Date, minutes: Int)? {
         let calendar = Calendar.current
-
         let grouped = Dictionary(
             grouping: sessionLogs.filter { $0.exitReason == .completed || $0.exitReason == .prolonged }
         ) {
             calendar.startOfDay(for: $0.startDate)
         }
-
         let dayTotals = grouped.map { date, logs -> (Date, Int) in
-            let seconds = logs.reduce(0) {
-                $0 + Int($1.endDate.timeIntervalSince($1.startDate))
-            }
-            return (date, seconds / 60)
+            (date, logs.reduce(0) { $0 + $1.durationMinutes })
         }
-
         return dayTotals.max { $0.1 < $1.1 }
     }
 
@@ -383,9 +343,7 @@ final class TaskStore: ObservableObject {
                 ($0.exitReason == .completed || $0.exitReason == .prolonged) &&
                 interval.contains($0.startDate)
             }
-            .reduce(0) {
-                $0 + Int($1.endDate.timeIntervalSince($1.startDate)) / 60
-            }
+            .reduce(0) { $0 + $1.durationMinutes }
     }
 
     // MARK: - Skip / Undo
@@ -419,57 +377,35 @@ final class TaskStore: ObservableObject {
     }
 
     // MARK: - Daily Task Management
-    /// Removes tasks that were scheduled for before today and are still pending.
-    /// This clears out unfinished tasks from previous days at the beginning of each day.
     func removeUnfinishedTasksFromPreviousDays() {
         let calendar = Calendar.current
-        let now = Date()
-        let todayStart = calendar.startOfDay(for: now)
-
-        // Remove pending tasks scheduled before today
+        let todayStart = calendar.startOfDay(for: Date())
         tasks.removeAll { task in
-            let taskDate = task.scheduledTime ?? task.startDate
-            let taskStartOfDay = calendar.startOfDay(for: taskDate)
-            
-            // Remove if it's from a previous day and still pending
+            let taskStartOfDay = calendar.startOfDay(for: task.scheduledTime ?? task.startDate)
             return task.status == .pending && taskStartOfDay < todayStart
         }
-        
         saveTasks()
     }
 
-    /// Performs daily cleanup if a new day has started since the last cleanup.
-    /// This ensures tasks from previous days are removed at the beginning of each day.
     func performDailyCleanupIfNeeded() {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         let lastCleanupKey = "last_task_cleanup_day"
-        
-        // Get the last day cleanup was performed
-        if let lastCleanupData = UserDefaults.standard.data(forKey: lastCleanupKey),
-           let lastCleanupDate = try? JSONDecoder().decode(Date.self, from: lastCleanupData) {
-            let lastCleanupDay = calendar.startOfDay(for: lastCleanupDate)
-            
-            // Only cleanup if a new day has started
-            if today == lastCleanupDay {
-                return
-            }
+
+        let lastCleanupInterval = UserDefaults.standard.double(forKey: lastCleanupKey)
+        if lastCleanupInterval != 0 {
+            let lastCleanupDay = calendar.startOfDay(for: Date(timeIntervalSinceReferenceDate: lastCleanupInterval))
+            if today == lastCleanupDay { return }
         }
-        
-        // Perform cleanup
+
         removeUnfinishedTasksFromPreviousDays()
-        
-        // Record today as the last cleanup day
-        if let encoded = try? JSONEncoder().encode(Date()) {
-            UserDefaults.standard.set(encoded, forKey: lastCleanupKey)
-        }
+        UserDefaults.standard.set(Date().timeIntervalSinceReferenceDate, forKey: lastCleanupKey)
     }
 
     // MARK: - Persistence
     private let tasksKey = "focus_tasks"
-    private let logsKey = "focus_session_logs"
+    private let logsKey  = "focus_session_logs"
 
-    /// Wipes all tasks and session logs from memory and UserDefaults.
     func deleteAllData() {
         tasks = []
         sessionLogs = []
@@ -490,7 +426,6 @@ final class TaskStore: ObservableObject {
             let data = UserDefaults.standard.data(forKey: tasksKey),
             let decoded = try? JSONDecoder().decode([FocusTask].self, from: data)
         else { return }
-
         tasks = decoded
     }
 
@@ -505,7 +440,6 @@ final class TaskStore: ObservableObject {
             let data = UserDefaults.standard.data(forKey: logsKey),
             let decoded = try? JSONDecoder().decode([FocusSessionLog].self, from: data)
         else { return }
-
         sessionLogs = decoded
     }
 
@@ -519,9 +453,8 @@ final class TaskStore: ObservableObject {
 
     func focusStatsSnapshot(referenceDate: Date = Date()) -> DashboardFocusStatsSnapshot {
         let sessions = completedSessionsToday(referenceDate: referenceDate)
-        let minutes = focusedMinutesToday(referenceDate: referenceDate)
-        let last7 = last7DaysFocusMinutes(referenceDate: referenceDate).map { ($0.date, $0.minutes) }
-
+        let minutes  = focusedMinutesToday(referenceDate: referenceDate)
+        let last7    = last7DaysFocusMinutes(referenceDate: referenceDate).map { ($0.date, $0.minutes) }
         return DashboardFocusStatsSnapshot(
             sessionsToday: sessions,
             focusedMinutesToday: minutes,
@@ -548,27 +481,20 @@ final class TaskStore: ObservableObject {
                 ($0.exitReason == .completed || $0.exitReason == .prolonged)
                 && calendar.isDate($0.startDate, inSameDayAs: dayStart)
             }
-            .reduce(0) { partial, log in
-                partial + Int(log.endDate.timeIntervalSince(log.startDate) / 60)
-            }
+            .reduce(0) { $0 + $1.durationMinutes }
     }
 
     func last7DaysFocusMinutes(referenceDate: Date = Date()) -> [(date: Date, minutes: Int)] {
         let calendar = Calendar.current
         let referenceDay = calendar.startOfDay(for: referenceDate)
-
         return (0..<7).map { offset in
             let day = calendar.date(byAdding: .day, value: -(6 - offset), to: referenceDay) ?? referenceDay
-
             let minutes = sessionLogs
                 .filter {
                     ($0.exitReason == .completed || $0.exitReason == .prolonged)
                     && calendar.isDate($0.startDate, inSameDayAs: day)
                 }
-                .reduce(0) { partial, log in
-                    partial + Int(log.endDate.timeIntervalSince(log.startDate) / 60)
-                }
-
+                .reduce(0) { $0 + $1.durationMinutes }
             return (date: day, minutes: minutes)
         }
     }
@@ -579,9 +505,9 @@ final class TaskStore: ObservableObject {
         let referenceDayStart = calendar.startOfDay(for: referenceDate)
         let todayStart = calendar.startOfDay(for: Date())
 
-        // Analyze only completed days (no future/today).
         let dayStarts: [Date] = (1...7).compactMap { offset in
-            calendar.date(byAdding: .day, value: -offset, to: referenceDayStart).map { calendar.startOfDay(for: $0) }
+            calendar.date(byAdding: .day, value: -offset, to: referenceDayStart)
+                .map { calendar.startOfDay(for: $0) }
         }
 
         var decisions: [BreakInsightDecisionEngine.Decision] = []
@@ -589,24 +515,11 @@ final class TaskStore: ObservableObject {
         for dayStart in dayStarts {
             guard dayStart < todayStart else { continue }
 
-            // Skip days with no tasks.
-            let tasksForDay = tasks.filter { task in
-                let d = task.scheduledTime ?? task.startDate
-                return calendar.isDate(d, inSameDayAs: dayStart)
-            }
+            let tasksForDay = tasksForDay(dayStart)
             guard !tasksForDay.isEmpty else { continue }
+            guard !tasksForDay.contains(where: { $0.status != .completed }) else { continue }
+            guard !dayHasDistracted(dayStart) else { continue }
 
-            // Do not analyze incomplete days.
-            let hasIncomplete = tasksForDay.contains { $0.status != .completed }
-            guard !hasIncomplete else { continue }
-
-            // If user lost focus that day, treat as non-completed day.
-            let hasDistracted = sessionLogs.contains { log in
-                log.exitReason == .distracted && calendar.isDate(log.startDate, inSameDayAs: dayStart)
-            }
-            guard !hasDistracted else { continue }
-
-            // Pick a representative task (largest planned focus load).
             let representativeTask = tasksForDay.max { lhs, rhs in
                 let l = lhs.focusPlan.blocks.filter { $0.type == .focus }.reduce(0) { $0 + $1.duration }
                 let r = rhs.focusPlan.blocks.filter { $0.type == .focus }.reduce(0) { $0 + $1.duration }
