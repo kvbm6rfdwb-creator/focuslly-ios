@@ -377,7 +377,7 @@ final class TaskStore: ObservableObject {
     }
 
     // MARK: - Daily Task Management
-    func removeUnfinishedTasksFromPreviousDays() {
+    private func removeUnfinishedTasksFromPreviousDays() {
         let calendar = Calendar.current
         let todayStart = calendar.startOfDay(for: Date())
         tasks.removeAll { task in
