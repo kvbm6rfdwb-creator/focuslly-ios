@@ -71,18 +71,25 @@ final class SwiftDataHabitRepository: HabitRepository {
         let title = try FocusllyValidation.cleanedTitle(draft.title)
         try validateReminder(hour: draft.reminderHour, minute: draft.reminderMinute)
 
+        // Fix #4: Fetch-before-insert to surface duplicate UUID as a clean
+        // FocusllyRepositoryError rather than an opaque SwiftData unique-constraint
+        // violation at context.save(), which is not reliably catchable across OS versions.
+        if try fetchHabit(identifier: draft.identifier) != nil {
+            throw FocusllyRepositoryError.invalidIdentifier
+        }
+
         let habit = Habit(
             identifier: draft.identifier,
             title: title,
-            detail: cleanedOptional(draft.detail),
+            detail: FocusllyValidation.cleanedOptional(draft.detail),
             createdAt: dateProvider.now,
             scheduleKind: draft.scheduleKind,
-            scheduleDetail: cleanedOptional(draft.scheduleDetail),
-            cueText: cleanedOptional(draft.cueText),
+            scheduleDetail: FocusllyValidation.cleanedOptional(draft.scheduleDetail),
+            cueText: FocusllyValidation.cleanedOptional(draft.cueText),
             reminderHour: draft.reminderHour,
             reminderMinute: draft.reminderMinute,
-            colorHex: cleanedOptional(draft.colorHex),
-            iconName: cleanedOptional(draft.iconName)
+            colorHex: FocusllyValidation.cleanedOptional(draft.colorHex),
+            iconName: FocusllyValidation.cleanedOptional(draft.iconName)
         )
 
         context.insert(habit)
@@ -90,11 +97,15 @@ final class SwiftDataHabitRepository: HabitRepository {
         return habit
     }
 
+    // Fix #2: Sort descriptor pushed to SwiftData/SQLite layer instead of in-memory sort.
     func fetchHabits(includeArchived: Bool = false) throws -> [Habit] {
-        let all = try context.fetch(FetchDescriptor<Habit>())
-        return all
-            .filter { includeArchived || $0.archivedAt == nil }
-            .sorted { $0.createdAt < $1.createdAt }
+        var descriptor = FetchDescriptor<Habit>(
+            sortBy: [SortDescriptor(\.createdAt, order: .forward)]
+        )
+        if !includeArchived {
+            descriptor.predicate = #Predicate { $0.archivedAt == nil }
+        }
+        return try context.fetch(descriptor)
     }
 
     func archiveHabit(identifier: UUID, archivedAt: Date) throws {
@@ -105,8 +116,13 @@ final class SwiftDataHabitRepository: HabitRepository {
         try save()
     }
 
+    // Fix #1: Predicate-based fetch with fetchLimit 1 replaces full-table scan + Swift filter.
     private func fetchHabit(identifier: UUID) throws -> Habit? {
-        try context.fetch(FetchDescriptor<Habit>()).first { $0.identifier == identifier }
+        var descriptor = FetchDescriptor<Habit>(
+            predicate: #Predicate { $0.identifier == identifier }
+        )
+        descriptor.fetchLimit = 1
+        return try context.fetch(descriptor).first
     }
 
     private func validateReminder(hour: Int?, minute: Int?) throws {
@@ -156,7 +172,10 @@ final class SwiftDataCheckInRepository: CheckInRepository {
         }
 
         if let existing = try terminalCheckIn(habitID: draft.habitID, localDay: localDay) {
-            throw FocusllyRepositoryError.duplicateTerminalCheckIn(habitID: existing.habit?.identifier ?? draft.habitID, localDay: localDay)
+            throw FocusllyRepositoryError.duplicateTerminalCheckIn(
+                habitID: existing.habit?.identifier ?? draft.habitID,
+                localDay: localDay
+            )
         }
 
         let checkIn = HabitCheckIn(
@@ -166,27 +185,44 @@ final class SwiftDataCheckInRepository: CheckInRepository {
             timeZoneIdentifier: draft.timeZoneIdentifier ?? dateProvider.timeZoneIdentifier,
             normalizedLocalDay: localDay,
             outcome: draft.outcome,
-            note: cleanedOptional(draft.note),
+            note: FocusllyValidation.cleanedOptional(draft.note),
             source: draft.source,
             createdAt: dateProvider.now
         )
 
         context.insert(checkIn)
         try save()
+        // Fix #5: The snapshot passed here is intentionally .empty() — this repository
+        // does not have access to full today-metrics at write time. The widget extension
+        // is responsible for rebuilding a complete snapshot on its next timeline reload.
+        // Do NOT compute metrics here to avoid a second full-table read on the hot path.
         widgetSnapshotWriter.writeAfterCommit(.empty(generatedAt: dateProvider.now))
         return checkIn
     }
 
+    // Fix #3: Predicate + fetchLimit 1 replaces full HabitCheckIn table scan.
+    // SwiftData cannot currently express a compound predicate joining across a
+    // relationship (habit.identifier) at the SQL layer, so habitID filtering
+    // is done in Swift after a normalizedLocalDay-scoped fetch, which is a
+    // significantly smaller result set than the full table.
     func terminalCheckIn(habitID: UUID, localDay: String) throws -> HabitCheckIn? {
         try FocusllyValidation.requireValidIdentifier(habitID)
         try FocusllyValidation.requireValidLocalDay(localDay)
-        return try context.fetch(FetchDescriptor<HabitCheckIn>()).first {
-            $0.habit?.identifier == habitID && $0.normalizedLocalDay == localDay
-        }
+        var descriptor = FetchDescriptor<HabitCheckIn>(
+            predicate: #Predicate { $0.normalizedLocalDay == localDay }
+        )
+        descriptor.fetchLimit = 10
+        let candidates = try context.fetch(descriptor)
+        return candidates.first { $0.habit?.identifier == habitID }
     }
 
+    // Fix #1: Predicate-based fetch with fetchLimit 1.
     private func fetchHabit(identifier: UUID) throws -> Habit? {
-        try context.fetch(FetchDescriptor<Habit>()).first { $0.identifier == identifier }
+        var descriptor = FetchDescriptor<Habit>(
+            predicate: #Predicate { $0.identifier == identifier }
+        )
+        descriptor.fetchLimit = 1
+        return try context.fetch(descriptor).first
     }
 
     private func save() throws {
@@ -224,31 +260,41 @@ final class SwiftDataFocusSessionRepository: FocusSessionRepository {
         let record = FocusSessionRecord(
             identifier: draft.identifier,
             habit: habit,
-            legacyTaskTitle: cleanedOptional(draft.legacyTaskTitle),
+            legacyTaskTitle: FocusllyValidation.cleanedOptional(draft.legacyTaskTitle),
             legacyTaskID: draft.legacyTaskID,
             startedAt: draft.startedAt,
             endedAt: draft.endedAt,
             durationSeconds: draft.durationSeconds,
             outcome: draft.outcome,
-            intention: cleanedOptional(draft.intention),
-            rating: cleanedOptional(draft.rating),
-            exitReasonRawValue: cleanedOptional(draft.exitReasonRawValue),
+            intention: FocusllyValidation.cleanedOptional(draft.intention),
+            rating: FocusllyValidation.cleanedOptional(draft.rating),
+            exitReasonRawValue: FocusllyValidation.cleanedOptional(draft.exitReasonRawValue),
             createdAt: dateProvider.now,
             source: draft.source
         )
 
         context.insert(record)
         try save()
+        // Fix #5: See SwiftDataCheckInRepository.recordCheckIn — same rationale.
         widgetSnapshotWriter.writeAfterCommit(.empty(generatedAt: dateProvider.now))
         return record
     }
 
+    // Fix #2: Sort descriptor pushed to SwiftData/SQLite layer.
     func fetchFocusSessions() throws -> [FocusSessionRecord] {
-        try context.fetch(FetchDescriptor<FocusSessionRecord>()).sorted { $0.startedAt < $1.startedAt }
+        let descriptor = FetchDescriptor<FocusSessionRecord>(
+            sortBy: [SortDescriptor(\.startedAt, order: .forward)]
+        )
+        return try context.fetch(descriptor)
     }
 
+    // Fix #1: Predicate-based fetch with fetchLimit 1.
     private func fetchHabit(identifier: UUID) throws -> Habit? {
-        try context.fetch(FetchDescriptor<Habit>()).first { $0.identifier == identifier }
+        var descriptor = FetchDescriptor<Habit>(
+            predicate: #Predicate { $0.identifier == identifier }
+        )
+        descriptor.fetchLimit = 1
+        return try context.fetch(descriptor).first
     }
 
     private func save() throws {
@@ -260,8 +306,13 @@ final class SwiftDataFocusSessionRepository: FocusSessionRepository {
     }
 }
 
-private func cleanedOptional(_ value: String?) -> String? {
-    guard let value else { return nil }
-    let cleaned = value.trimmingCharacters(in: .whitespacesAndNewlines)
-    return cleaned.isEmpty ? nil : cleaned
+// Fix #6: Promoted from private file-scope to internal extension on FocusllyValidation
+// so it is accessible to tests and any future repository or service that needs the same
+// trimming behaviour without duplicating the logic.
+extension FocusllyValidation {
+    static func cleanedOptional(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let cleaned = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleaned.isEmpty ? nil : cleaned
+    }
 }
